@@ -1,4 +1,4 @@
-import { watch } from "fs";
+import { watch } from "chokidar";
 import type { Client } from "discord.js";
 import type { ConfigEntry } from "../types/index.ts";
 import { organizeFiles } from "../setup/organizer.ts";
@@ -81,14 +81,30 @@ export function watchRoots(
         });
     }
 
-    for (const root of roots) {
-        watch(root, (_event, filename) => {
-            if (!filename) return;
+    const watcher = watch(roots, {
+        ignored: /(^|[\/\\])\../, // ignore dotfiles
+        persistent: true,
+        ignoreInitial: true,
+        depth: 0, // only watch root level, not subdirectories
+        awaitWriteFinish: {
+            stabilityThreshold: 2000, // wait until file stops growing for 2s
+            pollInterval: 100,
+        },
+    });
 
-            const existing = timeouts.get(root);
-            if (existing) clearTimeout(existing);
+    watcher.on("add", (filePath: string) => {
+        // Determine which root this file belongs to
+        const root = roots.find((r) => filePath.startsWith(r + "/") || filePath === r);
+        if (!root) return;
 
-            scheduleProcess(client, config, logoPath, options, root);
-        });
-    }
+        const existing = timeouts.get(root);
+        if (existing) clearTimeout(existing);
+
+        scheduleProcess(client, config, logoPath, options, root);
+    });
+
+    watcher.on("error", (error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`❌ Watcher error:`, message);
+    });
 }
