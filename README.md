@@ -169,16 +169,18 @@ make down                                        # stop
 
 ## 🛠️ Without Docker (dev)
 
+> Requires pnpm. Enable it once: `corepack enable pnpm`
+
 ```bash
 git clone https://github.com/NatalyShadow/Uploader-Grub.git
 cd uploader-grub-server
-npm install
+pnpm install
 cp config.example.json config.json   # edit it
 # create .env with DISCORD_TOKEN and MEDIA_PATH
 
-npm run dev                          # hot reload
-npm start                            # production
-npm start -- --skip-watermark        # flags work the same
+pnpm dev                             # hot reload
+pnpm start                           # production
+pnpm start -- --skip-watermark       # flags work the same
 ```
 
 ---
