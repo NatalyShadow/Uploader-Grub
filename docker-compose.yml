@@ -1,0 +1,20 @@
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: discord_uploader_bot
+    user: "${UID:-1000}:${GID:-1000}"
+    command: node dist/index.js ${EXTRA_FLAGS:-}
+    env_file: .env
+    environment:
+      HOME: /data
+    volumes:
+      # Credentials & config (read-only)
+      - ./.env:/app/.env:ro
+      - ./config.json:/app/config.json:ro
+
+      # Media folders from host → /data in the container
+      # config.json uses $HOME/... which resolves to /data/...
+      # Set MEDIA_PATH in .env to your host media root folder
+      - ${MEDIA_PATH}:/data:rw

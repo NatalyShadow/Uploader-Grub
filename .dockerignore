@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.git/
+.husky/
+*.tsbuildinfo
+.eslintcache
+.prettiercache
+.env
+src/config.json
+Dockerfile
+docker-compose.yml
+.dockerignore
