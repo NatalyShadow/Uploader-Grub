@@ -82,7 +82,7 @@ export function watchRoots(
     }
 
     const watcher = watch(roots, {
-        ignored: /(^|[\/\\])\../, // ignore dotfiles
+        ignored: /(^|[/\\])\../, // ignore dotfiles
         persistent: true,
         ignoreInitial: true,
         depth: 0, // only watch root level, not subdirectories
