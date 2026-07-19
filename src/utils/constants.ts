@@ -37,4 +37,4 @@ export const VIDEO_EXTS = [
 ] as const;
 export const GIF_EXT = ".gif";
 
-export const UUID_PREFIX = "GRUB_NSFW_MEDIA_";
+export const UUID_PREFIX = process.env.MEDIA_NAME_PREFIX ?? "";
