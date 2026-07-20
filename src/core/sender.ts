@@ -6,6 +6,7 @@ import {
     MAX_SEND_RETRIES,
     RETRY_DELAY_MS,
     MAX_RETRY_AFTER_MS,
+    SEND_REASON_TOO_LARGE,
 } from "../utils/constants.ts";
 import type { SendResult } from "../types/index.ts";
 
@@ -75,8 +76,9 @@ export async function sendFile(
     if (stats.size > MAX_FILE_SIZE) {
         const sizeMB = (stats.size / (1024 * 1024)).toFixed(1);
         const limitMB = (MAX_FILE_SIZE / (1024 * 1024)).toFixed(1);
-        console.log(`⚠️ Final file too large: ${fileName} (${sizeMB}MB > ${limitMB}MB)`);
-        return { success: false, reason: "too_large" };
+        const message = `${sizeMB}MB > ${limitMB}MB`;
+        console.log(`⚠️ Final file too large: ${fileName} (${message})`);
+        return { success: false, reason: SEND_REASON_TOO_LARGE, message };
     }
 
     let lastError: unknown = null;
@@ -111,7 +113,7 @@ export async function sendFile(
         }
     }
 
-    const reason = lastError instanceof Error ? lastError.message : String(lastError);
-    console.error(`❌ Error sending ${fileName}:`, reason);
-    return { success: false, reason };
+    const message = lastError instanceof Error ? lastError.message : String(lastError);
+    console.error(`❌ Error sending ${fileName}:`, message);
+    return { success: false, reason: "error", message };
 }

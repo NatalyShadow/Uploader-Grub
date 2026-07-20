@@ -3,7 +3,7 @@ import { join, extname, basename, dirname } from "path";
 import { randomUUID } from "crypto";
 import type { Client } from "discord.js";
 
-import { MAX_FILE_SIZE } from "../utils/constants.ts";
+import { MAX_FILE_SIZE, SEND_REASON_TOO_LARGE } from "../utils/constants.ts";
 import {
     readDirectory,
     getFileStats,
@@ -28,6 +28,28 @@ import { calculateLogoSize } from "../utils/watermark.ts";
 export interface PipelineOptions {
     skipWatermark: boolean;
     moveSent: boolean;
+}
+
+/**
+ * Moves the original file to `<root>/heavy/` when the post-watermark
+ * file exceeds Discord's 10MB upload limit. If the move fails (e.g. due
+ * to permissions or disk full), logs a warning and leaves the original
+ * in place to avoid data loss.
+ */
+function moveToHeavy(filePath: string, configPath: string): boolean {
+    const root = dirname(configPath);
+    const heavyDir = join(root, "heavy");
+    ensureDirectory(heavyDir);
+    const dest = join(heavyDir, basename(filePath));
+    const moved = moveFile(filePath, dest);
+    if (moved) {
+        console.log(`📦 Oversized → heavy/: ${basename(filePath)}`);
+    } else {
+        console.warn(
+            `⚠️ Could not move oversized ${basename(filePath)} to heavy/, keeping in place`
+        );
+    }
+    return moved;
 }
 
 async function processFile(logoPath: string, filePath: string, fileName: string): Promise<string> {
@@ -117,6 +139,8 @@ export async function runPipeline(
                     } else {
                         deleteFile(filePath, `Original file (${fileName})`);
                     }
+                } else if (result.reason === SEND_REASON_TOO_LARGE) {
+                    moveToHeavy(filePath, path);
                 }
             } catch (err) {
                 if (err instanceof Error) {

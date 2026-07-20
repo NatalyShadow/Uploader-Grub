@@ -21,6 +21,8 @@ export const RETRY_DELAY_MS = 5000;
 export const MAX_SEND_RETRIES = 3;
 export const MAX_RETRY_AFTER_MS = 30_000; // ceiling for backoff between send retries
 
+export const SEND_REASON_TOO_LARGE = "too_large";
+
 export const GIF_FFMPEG_TIMEOUT_MS = 60_000;
 export const VIDEO_FFMPEG_TIMEOUT_MS = 120_000;
 export const FFPROBE_TIMEOUT_MS = 30_000;
