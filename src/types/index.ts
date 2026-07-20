@@ -22,8 +22,12 @@ export interface Dimensions {
 /** Categories the organizer can detect. */
 export type MediaFolder = "images" | "videos" | "heavy";
 
+/** Reason a file failed to send. */
+export type SendFailureReason = "duplicate" | "too_large" | "error";
+
 /** Result of a single file send attempt. */
-export type SendResult = { success: true } | { success: false; reason: string };
+export type SendResult =
+    { success: true } | { success: false; reason: SendFailureReason; message?: string };
 
 /** Stats returned by the loose-file organizer. */
 export interface OrganizerStats {

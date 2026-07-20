@@ -19,6 +19,9 @@ export const WATERMARK_MAX_SIZE = 200; // px
 
 export const RETRY_DELAY_MS = 5000;
 export const MAX_SEND_RETRIES = 3;
+export const MAX_RETRY_AFTER_MS = 30_000; // ceiling for backoff between send retries
+
+export const SEND_REASON_TOO_LARGE = "too_large";
 
 export const GIF_FFMPEG_TIMEOUT_MS = 60_000;
 export const VIDEO_FFMPEG_TIMEOUT_MS = 120_000;
@@ -37,4 +40,4 @@ export const VIDEO_EXTS = [
 ] as const;
 export const GIF_EXT = ".gif";
 
-export const UUID_PREFIX = "GRUB_NSFW_MEDIA_";
+export const UUID_PREFIX = process.env.MEDIA_NAME_PREFIX ?? "";

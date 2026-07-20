@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import { basename } from "path";
 import {
     WATERMARK_MARGIN,
     WATERMARK_OPACITY,
@@ -9,6 +10,7 @@ import {
 } from "../utils/constants.ts";
 import { getVideoDuration } from "../utils/ffprobe.ts";
 import { registerProcess, unregisterProcess } from "../utils/processTracker.ts";
+import { createProgressTracker } from "../utils/progress.ts";
 
 function buildFilterComplex(logoSize: number, scaleFactor?: number): string {
     let videoChain = "[0:v]";
@@ -80,6 +82,12 @@ export async function applyVideoWatermark(
 
     const args = [
         "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-progress",
+        "pipe:1",
+        "-nostats",
         "-i",
         inputPath,
         "-i",
@@ -112,13 +120,38 @@ export async function applyVideoWatermark(
     ];
 
     return new Promise((resolve, reject) => {
-        const ffmpeg = spawn("ffmpeg", args, { stdio: "inherit" });
+        const ffmpeg = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
         registerProcess(ffmpeg);
+
+        const tracker = createProgressTracker(basename(inputPath), duration);
+
+        let progressBuffer = "";
+        ffmpeg.stdout.on("data", (chunk: Buffer) => {
+            progressBuffer += chunk.toString();
+            const lines = progressBuffer.split("\n");
+            progressBuffer = lines.pop() ?? "";
+            for (const line of lines) {
+                const match = /^out_time_us=(\d+)/.exec(line);
+                if (match) {
+                    tracker.update(parseInt(match[1], 10) / 1_000_000);
+                }
+            }
+        });
+
+        let stderrBuffer = "";
+        ffmpeg.stderr.on("data", (chunk: Buffer) => {
+            stderrBuffer += chunk.toString();
+            // Keep only the last 4KB to avoid unbounded growth
+            if (stderrBuffer.length > 4096) {
+                stderrBuffer = stderrBuffer.slice(-4096);
+            }
+        });
 
         const timeout = setTimeout(() => {
             console.error(
                 `⏱️ Video processing timed out after ${VIDEO_FFMPEG_TIMEOUT_MS / 1000}s, killing ffmpeg...`
             );
+            tracker.fail();
             try {
                 ffmpeg.kill("SIGKILL");
             } catch {
@@ -131,14 +164,23 @@ export async function applyVideoWatermark(
         ffmpeg.on("error", (err) => {
             clearTimeout(timeout);
             unregisterProcess(ffmpeg);
+            tracker.fail();
             reject(err);
         });
 
         ffmpeg.on("close", (code: number | null) => {
             clearTimeout(timeout);
             unregisterProcess(ffmpeg);
-            if (code === 0) resolve();
-            else reject(new Error(`ffmpeg exited with code ${code}`));
+            if (code === 0) {
+                tracker.complete();
+                resolve();
+            } else {
+                tracker.fail();
+                if (stderrBuffer) {
+                    console.error(`stderr: ${stderrBuffer.slice(-500)}`);
+                }
+                reject(new Error(`ffmpeg exited with code ${code}`));
+            }
         });
     });
 }

@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import { basename } from "path";
 import { WATERMARK_MARGIN, WATERMARK_OPACITY, GIF_FFMPEG_TIMEOUT_MS } from "../utils/constants.ts";
 import { registerProcess, unregisterProcess } from "../utils/processTracker.ts";
 
@@ -8,9 +9,15 @@ export function applyGifWatermark(
     outputPath: string,
     logoSize: number
 ): Promise<void> {
+    const label = basename(inputPath);
+
     return new Promise((resolve, reject) => {
         const args = [
             "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostats",
             "-i",
             inputPath,
             "-i",
@@ -26,8 +33,18 @@ export function applyGifWatermark(
             outputPath,
         ];
 
-        const ffmpeg = spawn("ffmpeg", args, { stdio: "inherit" });
+        const ffmpeg = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
         registerProcess(ffmpeg);
+
+        console.log(`⏳ Procesando GIF: ${label}...`);
+
+        let stderrBuffer = "";
+        ffmpeg.stderr.on("data", (chunk: Buffer) => {
+            stderrBuffer += chunk.toString();
+            if (stderrBuffer.length > 4096) {
+                stderrBuffer = stderrBuffer.slice(-4096);
+            }
+        });
 
         const timeout = setTimeout(() => {
             console.error(
@@ -39,20 +56,30 @@ export function applyGifWatermark(
                 // ignore
             }
             unregisterProcess(ffmpeg);
+            console.log(`❌ ${label} falló (timeout)`);
             reject(new Error("GIF processing timed out"));
         }, GIF_FFMPEG_TIMEOUT_MS);
 
         ffmpeg.on("error", (err) => {
             clearTimeout(timeout);
             unregisterProcess(ffmpeg);
+            console.log(`❌ ${label} falló`);
             reject(err);
         });
 
         ffmpeg.on("close", (code: number | null) => {
             clearTimeout(timeout);
             unregisterProcess(ffmpeg);
-            if (code === 0) resolve();
-            else reject(new Error(`ffmpeg exited with code ${code}`));
+            if (code === 0) {
+                console.log(`✅ ${label} listo`);
+                resolve();
+            } else {
+                console.log(`❌ ${label} falló`);
+                if (stderrBuffer) {
+                    console.error(`stderr: ${stderrBuffer.slice(-500)}`);
+                }
+                reject(new Error(`ffmpeg exited with code ${code}`));
+            }
         });
     });
 }

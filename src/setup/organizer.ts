@@ -13,8 +13,33 @@ function getOrganizerType(fileName: string): MediaFolder | null {
     return null;
 }
 
+const INVALID_FILENAME_CHARS = /[\\/:*?"<>|]/g;
+
+/**
+ * Normalises a user-supplied prefix so the generated file name always
+ * has exactly one underscore between the prefix and the UUID, regardless
+ * of how the user formatted the env value.
+ *
+ *   "grub"    → "grub"
+ *   "grub_"   → "grub"
+ *   "_grub_"  → "grub"
+ *   "grub__"  → "grub"
+ *   "grub v2" → "grub_v2"
+ *   "  "      → ""
+ */
+function normalizePrefix(raw: string | undefined): string {
+    if (!raw) return "";
+    return raw
+        .trim()
+        .replace(INVALID_FILENAME_CHARS, "")
+        .replace(/\s+/g, "_")
+        .replace(/_+/g, "_")
+        .replace(/^_+|_+$/g, "");
+}
+
 function generateUuidName(extension: string): string {
-    return `${UUID_PREFIX}${randomUUID()}${extension}`;
+    const prefix = normalizePrefix(UUID_PREFIX);
+    return prefix ? `${prefix}_${randomUUID()}${extension}` : `${randomUUID()}${extension}`;
 }
 
 export function organizeFiles(rootPath: string): OrganizerStats {
