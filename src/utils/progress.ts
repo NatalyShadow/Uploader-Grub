@@ -61,6 +61,11 @@ export function createProgressTracker(label: string, totalSeconds: number): Prog
             clearOnComplete: false,
             stopOnComplete: true,
             fps: 5,
+            // Render the bar even when stdout/stderr is not a TTY (e.g. Docker).
+            // In TTY mode the cursor-based redraw still works; in non-TTY mode
+            // each update becomes a new line in the log.
+            noTTYOutput: true,
+            notTTYSchedule: 2000,
         },
         Presets.shades_classic
     );
