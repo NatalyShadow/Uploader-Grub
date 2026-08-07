@@ -111,17 +111,19 @@ export async function processHeavyFiles(
                     continue;
                 }
 
-                // Move one level up (same level as heavy/) so the organizer routes
-                // it to videos/ on the next normal run.
+                // Drop directly into the matching media folder (same level as heavy/):
+                // videos → videos/, images and GIFs → images/. The next normal
+                // run reads those folders directly, no organizer re-routing.
+                const mediaFolder = processorType === "video" ? "videos" : "images";
                 const finalName = `${basename(fileName, extname(fileName))}${outputExt}`;
-                const finalPath = join(root, finalName);
+                const finalPath = join(root, mediaFolder, finalName);
                 const moved = moveFile(processedTempPath, finalPath);
                 unregisterTemp(processedTempPath);
 
                 if (moved) {
                     // Delete original from heavy/ only if move succeeded
                     deleteFile(filePath, `Original heavy: ${fileName}`);
-                    console.log(`✅ Processed: ${fileName} → ${finalPath} (ready to organize)`);
+                    console.log(`✅ Processed: ${fileName} → ${finalPath} (ready to upload)`);
                 } else {
                     console.error(`❌ Failed to move processed file, keeping original in heavy/`);
                     // Clean up orphaned temp file

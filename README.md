@@ -147,8 +147,8 @@ make up FLAGS="--process-heavy"
 - Reads all files from each `heavy/` folder (images, videos, GIFs)
 - Applies watermark (unless `--skip-watermark`)
 - Compresses nothing: videos use the same encode as the normal pipeline — **CRF** (default 20, constant quality) + **audio copied without loss** (only re-encoded to AAC if the container can't take the original codec). No bitrate forcing, no resolution downscale; preset defaults to `fast` to keep CPU/heat low
-- Moves files that now fit ≤10MB **one level up** (to the folder that contains `heavy/`) so a normal `make up` / `--watch` run organizes them into `videos/`
-- Files that still exceed 10MB are kept in `heavy/` **replaced by their watermarked copy** — nothing stays unmarked
+- Moves files that now fit the limit **directly into their matching media folder** — `videos/` for videos, `images/` for images and GIFs (same level as `heavy/`) — so the next normal `make up` / `--watch` run uploads them without needing another organize pass
+- Files that still exceed the limit are kept in `heavy/` **replaced by their watermarked copy** — nothing stays unmarked
 - Deletes originals from `heavy/` only after a successful move
 - **Does not connect to Discord** — no upload, no token needed (but Docker requires it)
 - **No watch mode** — runs once and exits
@@ -157,16 +157,13 @@ make up FLAGS="--process-heavy"
 ```
 your-media-root/
 └── category/
-    ├── images/       ← images land here after organizing
-    ├── videos/       ← videos land here after organizing
-    ├── heavy/        ← files > 10MB (input for --process-heavy)
+    ├── images/       ← processed images/GIFs that fit the limit land here (ready to upload)
+    ├── videos/       ← processed videos that fit land here (ready to upload)
+    ├── heavy/        ← still-oversized files (watermarked) await manual upload
     └── sent/         ← originals kept when using --move-sent
-
-Then run `make up` (or `--watch`) so the organizer picks the ≤10MB processed
-files up from `catategory/` (one level above `heavy/`) and moves them to `videos/` for upload.
 ```
 
-**Use case:** You have large videos in `heavy/` that you want watermarked (and possibly shrunk — the quality-first CRF re-encode often reduces high-bitrate sources). Files that end up fitting the limit are left in the category folder and your next `make up` run sends them to Discord; the rest stay watermarked in `heavy/` for manual upload.
+**Use case:** You have large videos in `heavy/` that you want watermarked (and possibly shrunk — the quality-first CRF re-encode often reduces high-bitrate sources). Files that end up fitting the limit go straight into `videos/` (or `images/`) and your next `make up` run sends them to Discord; the rest stay watermarked in `heavy/` for manual upload.
 
 > 💡 **Oversized files are not compressed to fit** — that's the point. If a file
 > stays over the limit after watermarking, it remains in `heavy/` (marked) with
