@@ -10,14 +10,15 @@ export const DISCORD_INTENTS = [
 // account/server allows more (Nitro, boosted server, etc.).
 export const MAX_FILE_SIZE = (parseFloat(process.env.MAX_FILE_SIZE_MB ?? "10") || 10) * 1024 * 1024;
 
-export const AUDIO_BITRATE_TARGET = 128; // kbps (re-encode used by the size/fit mode)
 export const FALLBACK_AUDIO_BITRATE = 192; // kbps (CRF mode fallback when audio copy fails)
-export const MIN_VIDEO_BITRATE = 300; // kbps before downscaling
 
 // Video encode knobs. CRF: lower = better quality / larger file (18-23 sensible).
 // Preset: slower = better compression efficiency at the cost of CPU time.
+// Default `fast` keeps visual quality (CRF is constant) while avoiding the CPU
+// spikes of slow/veryslow on long files. Set `VIDEO_PRESET=slow` only for
+// maximum compression with the heat/time that comes with it.
 export const VIDEO_CRF = parseInt(process.env.VIDEO_CRF ?? "20", 10) || 20;
-export const VIDEO_PRESET = process.env.VIDEO_PRESET ?? "slow";
+export const VIDEO_PRESET = process.env.VIDEO_PRESET ?? "fast";
 
 export const WATERMARK_MARGIN = 10; // px
 export const WATERMARK_HEIGHT_RATIO = 0.08; // 8% of the longest side

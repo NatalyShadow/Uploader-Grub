@@ -127,13 +127,13 @@ make down                                        # stop
 | `--skip-watermark` | 🌿 Send without watermark |
 | `--move-sent` | 📦 Move originals to `sent/` instead of deleting |
 | `--watch` | 👀 Keep running, process new files as they arrive |
-| `--process-heavy` | 🔄 Process `heavy/` folder: watermark + compress → move ≤10MB files up one level, keep oversized ones in `heavy/` |
+| `--process-heavy` | 🔄 Process `heavy/` folder with the same quality-first watermarking; move files that now fit the limit up one level, keep oversized ones (already watermarked) in `heavy/` |
 
 ---
 
 ### 🔄 Process Heavy Folder (`--process-heavy`)
 
-Processes files that were moved to `heavy/` (files > 10MB) by applying watermark and compression to fit Discord's 10MB limit, then moves the processed files **one level up** (same level as `heavy/`) so the organizer routes them to `videos/` on your next normal run.
+Processes files that were moved to `heavy/` (size > the upload limit) by applying the **same quality-first watermarking as the normal pipeline** (CRF video + audio copied losslessly). It never sacrifices quality just to fit under a limit: whatever still exceeds it is kept watermarked in `heavy/` for manual upload.
 
 ```bash
 # Using dedicated target (recommended)
@@ -146,7 +146,7 @@ make up FLAGS="--process-heavy"
 **What it does:**
 - Reads all files from each `heavy/` folder (images, videos, GIFs)
 - Applies watermark (unless `--skip-watermark`)
-- Compresses videos to ≤10MB using a size/fit encoder (bitrate from duration + the upload limit, with optional downscale) so they fit Discord's limit
+- Compresses nothing: videos use the same encode as the normal pipeline — **CRF** (default 20, constant quality) + **audio copied without loss** (only re-encoded to AAC if the container can't take the original codec). No bitrate forcing, no resolution downscale; preset defaults to `fast` to keep CPU/heat low
 - Moves files that now fit ≤10MB **one level up** (to the folder that contains `heavy/`) so a normal `make up` / `--watch` run organizes them into `videos/`
 - Files that still exceed 10MB are kept in `heavy/` **replaced by their watermarked copy** — nothing stays unmarked
 - Deletes originals from `heavy/` only after a successful move
@@ -166,9 +166,11 @@ Then run `make up` (or `--watch`) so the organizer picks the ≤10MB processed
 files up from `catategory/` (one level above `heavy/`) and moves them to `videos/` for upload.
 ```
 
-**Use case:** You have large videos in `heavy/` that you want to compress and watermark for Discord. After `--process-heavy` they are left in the category folder (≤10MB), and your next `make up` run sends them to Discord like any other file.
+**Use case:** You have large videos in `heavy/` that you want watermarked (and possibly shrunk — the quality-first CRF re-encode often reduces high-bitrate sources). Files that end up fitting the limit are left in the category folder and your next `make up` run sends them to Discord; the rest stay watermarked in `heavy/` for manual upload.
 
-> 💡 **Tip:** With `--skip-watermark` files are copied without compression, so they keep exceeding 10MB and stay in `heavy/`. Use the normal (watermarked) mode to actually shrink and promote them.
+> 💡 **Oversized files are not compressed to fit** — that's the point. If a file
+> stays over the limit after watermarking, it remains in `heavy/` (marked) with
+> its quality and audio intact, ready for manual upload.
 
 ---
 
@@ -206,13 +208,13 @@ files up from `catategory/` (one level above `heavy/`) and moves them to `videos
 
 ### 📏 Discord limits & video quality
 
-- **Upload limit** (default **10 MB**) — oversized files go to `heavy/` for manual/`--process-heavy` handling. Configurable via `MAX_FILE_SIZE_MB` (raise it if you have Nitro or a boosted server).
-- **Video watermarking** is quality-first over the default pipeline:
-  - **CRF near-lossless** encode (`-crf`, default 20) instead of a hard bitrate cap → keeps visual quality.
+- **Upload limit** (default **10 MB**) — this is a threshold, not a quality target. Files over it are sent to `heavy/` and never have their quality squeezed to fit. Configurable via `MAX_FILE_SIZE_MB` (raise it if you have Nitro or a boosted server).
+- **Video watermarking is quality-first, one single standard** for the normal pipeline and `--process-heavy`:
+  - **CRF near-lossless** encode (`-crf`, default 20) instead of a hard bitrate cap → keeps visual quality constant regardless of video length.
   - **Audio is copied losslessly** (`-c:a copy`) — zero audio loss; only falls back to AAC if the source track can't be remuxed.
-  - Files that still exceed the upload limit after watermarking go to `heavy/`.
-- **`--process-heavy`** uses a size/fit encoder (bitrate from duration + limit, optional downscale) to actually shrink files under the cup.
-- Encode knobs available via env: `VIDEO_CRF`, `VIDEO_PRESET`, `VIDEO_FFMPEG_TIMEOUT_MS`.
+  - Files that still exceed the upload limit after watermarking stay in `heavy/` as watermarked copies, ready for manual upload.
+- **`--process-heavy`** uses exactly the same quality-first encode — it watermark/re-encodes, promotes the files that now fit the limit, and leaves the rest watermarked in `heavy/`. No size/fit bitrate math, no downscaling.
+- Encode knobs available via env: `VIDEO_CRF`, `VIDEO_PRESET` (default `fast`), `VIDEO_FFMPEG_TIMEOUT_MS` (base timeout; scales with video length, capped at 6h).
 
 ---
 

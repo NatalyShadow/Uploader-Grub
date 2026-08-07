@@ -19,7 +19,7 @@ import type { ConfigEntry } from "../types/index.ts";
 
 import { resolveChannel } from "./channel.ts";
 import { applyImageWatermark } from "./imageProcessor.ts";
-import { applyVideoWatermark, applyVideoWatermarkForSize } from "./videoProcessor.ts";
+import { applyVideoWatermark } from "./videoProcessor.ts";
 import { applyGifWatermark } from "./gifProcessor.ts";
 import { sendFile } from "./sender.ts";
 import { registerTemp, unregisterTemp } from "../utils/tempTracker.ts";
@@ -52,16 +52,10 @@ function moveToHeavy(filePath: string, configPath: string): boolean {
     return moved;
 }
 
-export interface ProcessFileOptions {
-    /** When true, reuse the size/fit encode so the output stays under the upload limit (heavy processor). */
-    fitToSize?: boolean;
-}
-
 export async function processFile(
     logoPath: string,
     filePath: string,
-    fileName: string,
-    options: ProcessFileOptions = {}
+    fileName: string
 ): Promise<string> {
     const tmpDir = os.tmpdir();
     const ext = extname(fileName).toLowerCase();
@@ -83,14 +77,6 @@ export async function processFile(
 
         if (isGif(fileName)) {
             await applyGifWatermark(logoPath, filePath, outputPath, logoSize);
-        } else if (options.fitToSize) {
-            await applyVideoWatermarkForSize(
-                logoPath,
-                filePath,
-                outputPath,
-                logoSize,
-                MAX_FILE_SIZE
-            );
         } else {
             await applyVideoWatermark(logoPath, filePath, outputPath, logoSize);
         }
