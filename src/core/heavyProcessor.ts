@@ -7,11 +7,13 @@ import {
     isImage,
     isGif,
     isVideo,
-    ensureDirectory,
     moveFile,
     deleteFile,
     copyFile,
+    ensureDirectory,
 } from "../utils/files.ts";
+import { MAX_FILE_SIZE } from "../utils/constants.ts";
+import { unregisterTemp } from "../utils/tempTracker.ts";
 import { processFile } from "./pipeline.ts";
 import { getUniqueRoots } from "../setup/index.ts";
 
@@ -34,10 +36,6 @@ export async function processHeavyFiles(
             console.log(`📂 No files in heavy/: ${heavyDir}`);
             continue;
         }
-
-        // Only create the destination folder when there are files to process.
-        const processedDir = join(root, "processed");
-        ensureDirectory(processedDir);
 
         console.log(`🔄 Processing ${files.length} file(s) from heavy/: ${heavyDir}`);
 
@@ -84,15 +82,31 @@ export async function processHeavyFiles(
                           ? ".gif"
                           : extname(fileName).toLowerCase() || ".png";
 
-                // Keep the original base name (UUID from organizer), only swap extension
+                // Size gate: only promote files that now fit Discord's 10MB limit.
+                // Files that remain oversized stay in heavy/ (original intact) so the
+                // organizer never bounces them back to heavy/ from the root.
+                const processedStats = getFileStats(processedTempPath);
+                if (!processedStats || processedStats.size > MAX_FILE_SIZE) {
+                    const sizeMB = ((processedStats?.size ?? 0) / (1024 * 1024)).toFixed(1);
+                    console.log(
+                        `⏭️ ${fileName} still exceeds 10MB (${sizeMB}MB) after processing, keeping in heavy/`
+                    );
+                    deleteFile(processedTempPath, "Temp file");
+                    unregisterTemp(processedTempPath);
+                    continue;
+                }
+
+                // Move one level up (same level as heavy/) so the organizer routes
+                // it to videos/ on the next normal run.
                 const finalName = `${basename(fileName, extname(fileName))}${outputExt}`;
-                const finalPath = join(processedDir, finalName);
+                const finalPath = join(root, finalName);
                 const moved = moveFile(processedTempPath, finalPath);
+                unregisterTemp(processedTempPath);
 
                 if (moved) {
                     // Delete original from heavy/ only if move succeeded
                     deleteFile(filePath, `Original heavy: ${fileName}`);
-                    console.log(`✅ Processed: ${fileName} → processed/${finalName}`);
+                    console.log(`✅ Processed: ${fileName} → ${finalPath} (ready to organize)`);
                 } else {
                     console.error(`❌ Failed to move processed file, keeping original in heavy/`);
                     // Clean up orphaned temp file
@@ -101,6 +115,18 @@ export async function processHeavyFiles(
             } catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
                 console.error(`❌ Error processing ${fileName}:`, message);
+
+                // Quarantine unprocessable files so they are not retried on
+                // every run. The `_failed` folder is auto-skipped later because
+                // the loop only processes regular files (stats.isFile()).
+                const failedDir = join(heavyDir, "_failed");
+                ensureDirectory(failedDir);
+                const quarantined = moveFile(filePath, join(failedDir, fileName));
+                if (quarantined) {
+                    console.error(`📦 Quarantined ${fileName} to heavy/_failed/`);
+                } else {
+                    console.error(`⚠️ Could not quarantine ${fileName}, keeping in heavy/`);
+                }
                 // Continue with next file
             }
         }

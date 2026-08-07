@@ -127,13 +127,13 @@ make down                                        # stop
 | `--skip-watermark` | 🌿 Send without watermark |
 | `--move-sent` | 📦 Move originals to `sent/` instead of deleting |
 | `--watch` | 👀 Keep running, process new files as they arrive |
-| `--process-heavy` | 🔄 Process `heavy/` folder: watermark + compress → `processed/`, delete originals |
+| `--process-heavy` | 🔄 Process `heavy/` folder: watermark + compress → move ≤10MB files up one level, keep oversized ones in `heavy/` |
 
 ---
 
 ### 🔄 Process Heavy Folder (`--process-heavy`)
 
-Processes files that were moved to `heavy/` (files > 10MB) by applying watermark and compression to fit Discord's 10MB limit, then saves them to a new `processed/` folder and deletes the originals.
+Processes files that were moved to `heavy/` (files > 10MB) by applying watermark and compression to fit Discord's 10MB limit, then moves the processed files **one level up** (same level as `heavy/`) so the organizer routes them to `videos/` on your next normal run.
 
 ```bash
 # Using dedicated target (recommended)
@@ -147,8 +147,9 @@ make up FLAGS="--process-heavy"
 - Reads all files from each `heavy/` folder (images, videos, GIFs)
 - Applies watermark (unless `--skip-watermark`)
 - Compresses videos to ≤10MB using the same bitrate logic as the main pipeline
-- Saves processed files to `processed/` with UUID names (same naming as organized files)
-- Deletes originals from `heavy/` after successful processing
+- Moves files that now fit ≤10MB **one level up** (to the folder that contains `heavy/`) so a normal `make up` / `--watch` run organizes them into `videos/`
+- Files that still exceed 10MB are kept in `heavy/` (original intact) — no reprocessing loop
+- Deletes originals from `heavy/` only after a successful move
 - **Does not connect to Discord** — no upload, no token needed (but Docker requires it)
 - **No watch mode** — runs once and exits
 
@@ -159,11 +160,15 @@ your-media-root/
     ├── images/       ← images land here after organizing
     ├── videos/       ← videos land here after organizing
     ├── heavy/        ← files > 10MB (input for --process-heavy)
-    ├── processed/    ← output from --process-heavy (≤10MB, watermarked)
     └── sent/         ← originals kept when using --move-sent
+
+Then run `make up` (or `--watch`) so the organizer picks the ≤10MB processed
+files up from `catategory/` (one level above `heavy/`) and moves them to `videos/` for upload.
 ```
 
-**Use case:** You have large videos in `heavy/` that you want to compress and watermark for Discord, but you want to review them first or upload manually later.
+**Use case:** You have large videos in `heavy/` that you want to compress and watermark for Discord. After `--process-heavy` they are left in the category folder (≤10MB), and your next `make up` run sends them to Discord like any other file.
+
+> 💡 **Tip:** With `--skip-watermark` files are copied without compression, so they keep exceeding 10MB and stay in `heavy/`. Use the normal (watermarked) mode to actually shrink and promote them.
 
 ---
 
