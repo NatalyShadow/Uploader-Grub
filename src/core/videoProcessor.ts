@@ -58,29 +58,15 @@ function calculateBitrateKbps(
     return { videoKbps, totalKbps, needsScale };
 }
 
-export async function applyVideoWatermark(
-    logoPath: string,
+function buildFfmpegArgs(
     inputPath: string,
+    logoPath: string,
     outputPath: string,
-    logoSize: number,
-    maxBytes: number = MAX_FILE_SIZE
-): Promise<void> {
-    const duration = await getVideoDuration(inputPath);
-    const { videoKbps, totalKbps, needsScale } = calculateBitrateKbps(maxBytes, duration);
-
-    if (needsScale) {
-        console.log(
-            `📐 ${inputPath} needs scale 75% (bitrate ${videoKbps}kbps < ${MIN_VIDEO_BITRATE}kbps)`
-        );
-    } else {
-        console.log(
-            `🎯 ${inputPath} bitrate target: video=${videoKbps}kbps total=${totalKbps}kbps`
-        );
-    }
-
-    const filterComplex = buildFilterComplex(logoSize, needsScale ? 0.75 : undefined);
-
-    const args = [
+    filterComplex: string,
+    videoKbps: number,
+    totalKbps: number
+): string[] {
+    return [
         "-y",
         "-hide_banner",
         "-loglevel",
@@ -97,7 +83,7 @@ export async function applyVideoWatermark(
         "-map",
         "[v]",
         "-map",
-        "0:a?",
+        "0:a:0?",
         "-c:v",
         "libx264",
         "-preset",
@@ -118,12 +104,18 @@ export async function applyVideoWatermark(
         "+faststart",
         outputPath,
     ];
+}
 
+/** Run a single ffmpeg attempt. Rejects on any failure (non-zero exit, timeout, spawn error). */
+async function runFfmpeg(
+    args: string[],
+    label: string,
+    duration: number,
+    tracker: ReturnType<typeof createProgressTracker>
+): Promise<{ stderr: string }> {
     return new Promise((resolve, reject) => {
         const ffmpeg = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
         registerProcess(ffmpeg);
-
-        const tracker = createProgressTracker(basename(inputPath), duration);
 
         let progressBuffer = "";
         ffmpeg.stdout.on("data", (chunk: Buffer) => {
@@ -141,7 +133,6 @@ export async function applyVideoWatermark(
         let stderrBuffer = "";
         ffmpeg.stderr.on("data", (chunk: Buffer) => {
             stderrBuffer += chunk.toString();
-            // Keep only the last 4KB to avoid unbounded growth
             if (stderrBuffer.length > 4096) {
                 stderrBuffer = stderrBuffer.slice(-4096);
             }
@@ -149,7 +140,7 @@ export async function applyVideoWatermark(
 
         const timeout = setTimeout(() => {
             console.error(
-                `⏱️ Video processing timed out after ${VIDEO_FFMPEG_TIMEOUT_MS / 1000}s, killing ffmpeg...`
+                `⏱️ ${label} timed out after ${VIDEO_FFMPEG_TIMEOUT_MS / 1000}s, killing ffmpeg...`
             );
             tracker.fail();
             try {
@@ -173,7 +164,7 @@ export async function applyVideoWatermark(
             unregisterProcess(ffmpeg);
             if (code === 0) {
                 tracker.complete();
-                resolve();
+                resolve({ stderr: stderrBuffer });
             } else {
                 tracker.fail();
                 if (stderrBuffer) {
@@ -183,4 +174,37 @@ export async function applyVideoWatermark(
             }
         });
     });
+}
+
+export async function applyVideoWatermark(
+    logoPath: string,
+    inputPath: string,
+    outputPath: string,
+    logoSize: number,
+    maxBytes: number = MAX_FILE_SIZE
+): Promise<void> {
+    const duration = await getVideoDuration(inputPath);
+    const { videoKbps, totalKbps, needsScale } = calculateBitrateKbps(maxBytes, duration);
+
+    if (needsScale) {
+        console.log(
+            `📐 ${inputPath} needs scale 75% (bitrate ${videoKbps}kbps < ${MIN_VIDEO_BITRATE}kbps)`
+        );
+    } else {
+        console.log(
+            `🎯 ${inputPath} bitrate target: video=${videoKbps}kbps total=${totalKbps}kbps`
+        );
+    }
+
+    const filterComplex = buildFilterComplex(logoSize, needsScale ? 0.75 : undefined);
+    const label = basename(inputPath);
+
+    const tracker = createProgressTracker(label, duration);
+    console.log(`🎬 ${label}: watermarking...`);
+    await runFfmpeg(
+        buildFfmpegArgs(inputPath, logoPath, outputPath, filterComplex, videoKbps, totalKbps),
+        label,
+        duration,
+        tracker
+    );
 }

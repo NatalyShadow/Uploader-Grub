@@ -8,6 +8,7 @@ import { loadConfig } from "./config/loader.ts";
 import { initClient } from "./core/client.ts";
 import { runPipeline } from "./core/pipeline.ts";
 import { watchRoots } from "./core/watcher.ts";
+import { processHeavyFiles } from "./core/heavyProcessor.ts";
 import { runSetup, getUniqueRoots } from "./setup/index.ts";
 import { checkFfmpeg } from "./utils/validators.ts";
 import { killAllProcesses } from "./utils/processTracker.ts";
@@ -47,6 +48,7 @@ async function main(): Promise<void> {
         moveSent: args.includes("--move-sent"),
     };
     const watchMode = args.includes("--watch");
+    const processHeavy = args.includes("--process-heavy");
 
     if (options.skipWatermark) {
         console.log("🏷️ Watermark disabled via --skip-watermark");
@@ -57,7 +59,39 @@ async function main(): Promise<void> {
     if (watchMode) {
         console.log("👀 Watch mode enabled — will keep running for new files");
     }
+    if (processHeavy) {
+        console.log("🔄 Process-heavy mode enabled — processing heavy/ folder");
+    }
 
+    // Mutually exclusive flags
+    if (processHeavy && watchMode) {
+        console.error("❌ --process-heavy and --watch are mutually exclusive");
+        process.exit(1);
+    }
+
+    if (processHeavy) {
+        // Heavy processing mode: no Discord, no watch, just process heavy/ → processed/
+        if (!options.skipWatermark && !existsSync(logoPath)) {
+            console.error(`❌ Logo not found: ${logoPath}`);
+            process.exit(1);
+        }
+
+        if (!options.skipWatermark) {
+            const hasFfmpeg = await checkFfmpeg();
+            if (!hasFfmpeg) {
+                console.error("❌ ffmpeg not found. Please install ffmpeg.");
+                process.exit(1);
+            }
+        }
+
+        const config = loadConfig();
+        runSetup(config);
+
+        await processHeavyFiles(config, logoPath, { skipWatermark: options.skipWatermark });
+        process.exit(0);
+    }
+
+    // Normal bot mode
     if (!options.skipWatermark && !existsSync(logoPath)) {
         console.error(`❌ Logo not found: ${logoPath}`);
         process.exit(1);

@@ -116,6 +116,8 @@ make up FLAGS="--skip-watermark --move-sent"     # both
 make up FLAGS="--watch"                          # watch mode
 make up FLAGS="--watch --skip-watermark"         # watch + no WM
 make up FLAGS="--watch --move-sent"             # watch + keep
+make process-heavy                               # process heavy/ folder locally
+make up FLAGS="--process-heavy"                  # same via flag
 make build                                       # rebuild image
 make down                                        # stop
 ```
@@ -125,6 +127,43 @@ make down                                        # stop
 | `--skip-watermark` | 🌿 Send without watermark |
 | `--move-sent` | 📦 Move originals to `sent/` instead of deleting |
 | `--watch` | 👀 Keep running, process new files as they arrive |
+| `--process-heavy` | 🔄 Process `heavy/` folder: watermark + compress → `processed/`, delete originals |
+
+---
+
+### 🔄 Process Heavy Folder (`--process-heavy`)
+
+Processes files that were moved to `heavy/` (files > 10MB) by applying watermark and compression to fit Discord's 10MB limit, then saves them to a new `processed/` folder and deletes the originals.
+
+```bash
+# Using dedicated target (recommended)
+make process-heavy
+
+# Or via flag
+make up FLAGS="--process-heavy"
+```
+
+**What it does:**
+- Reads all files from each `heavy/` folder (images, videos, GIFs)
+- Applies watermark (unless `--skip-watermark`)
+- Compresses videos to ≤10MB using the same bitrate logic as the main pipeline
+- Saves processed files to `processed/` with UUID names (same naming as organized files)
+- Deletes originals from `heavy/` after successful processing
+- **Does not connect to Discord** — no upload, no token needed (but Docker requires it)
+- **No watch mode** — runs once and exits
+
+**Folder layout after processing:**
+```
+your-media-root/
+└── category/
+    ├── images/       ← images land here after organizing
+    ├── videos/       ← videos land here after organizing
+    ├── heavy/        ← files > 10MB (input for --process-heavy)
+    ├── processed/    ← output from --process-heavy (≤10MB, watermarked)
+    └── sent/         ← originals kept when using --move-sent
+```
+
+**Use case:** You have large videos in `heavy/` that you want to compress and watermark for Discord, but you want to review them first or upload manually later.
 
 ---
 

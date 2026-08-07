@@ -1,9 +1,8 @@
 import { join, extname } from "path";
 import { readdirSync, statSync, renameSync, existsSync } from "fs";
-import { randomUUID } from "crypto";
 
-import { IMAGE_EXTS, VIDEO_EXTS, GIF_EXT, MAX_FILE_SIZE, UUID_PREFIX } from "../utils/constants.ts";
-import { ensureDirectory } from "../utils/files.ts";
+import { IMAGE_EXTS, VIDEO_EXTS, GIF_EXT, MAX_FILE_SIZE } from "../utils/constants.ts";
+import { ensureDirectory, generateUuidName } from "../utils/files.ts";
 import type { OrganizerStats, MediaFolder } from "../types/index.ts";
 
 function getOrganizerType(fileName: string): MediaFolder | null {
@@ -11,35 +10,6 @@ function getOrganizerType(fileName: string): MediaFolder | null {
     if (IMAGE_EXTS.includes(ext as (typeof IMAGE_EXTS)[number]) || ext === GIF_EXT) return "images";
     if (VIDEO_EXTS.includes(ext as (typeof VIDEO_EXTS)[number])) return "videos";
     return null;
-}
-
-const INVALID_FILENAME_CHARS = /[\\/:*?"<>|]/g;
-
-/**
- * Normalises a user-supplied prefix so the generated file name always
- * has exactly one underscore between the prefix and the UUID, regardless
- * of how the user formatted the env value.
- *
- *   "grub"    → "grub"
- *   "grub_"   → "grub"
- *   "_grub_"  → "grub"
- *   "grub__"  → "grub"
- *   "grub v2" → "grub_v2"
- *   "  "      → ""
- */
-function normalizePrefix(raw: string | undefined): string {
-    if (!raw) return "";
-    return raw
-        .trim()
-        .replace(INVALID_FILENAME_CHARS, "")
-        .replace(/\s+/g, "_")
-        .replace(/_+/g, "_")
-        .replace(/^_+|_+$/g, "");
-}
-
-function generateUuidName(extension: string): string {
-    const prefix = normalizePrefix(UUID_PREFIX);
-    return prefix ? `${prefix}_${randomUUID()}${extension}` : `${randomUUID()}${extension}`;
 }
 
 export function organizeFiles(rootPath: string): OrganizerStats {

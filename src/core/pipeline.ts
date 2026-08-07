@@ -52,7 +52,11 @@ function moveToHeavy(filePath: string, configPath: string): boolean {
     return moved;
 }
 
-async function processFile(logoPath: string, filePath: string, fileName: string): Promise<string> {
+export async function processFile(
+    logoPath: string,
+    filePath: string,
+    fileName: string
+): Promise<string> {
     const tmpDir = os.tmpdir();
     const ext = extname(fileName).toLowerCase();
     const base = basename(fileName, ext).replace(/\s+/g, "_");
