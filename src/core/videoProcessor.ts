@@ -5,8 +5,11 @@ import {
     WATERMARK_OPACITY,
     MAX_FILE_SIZE,
     AUDIO_BITRATE_TARGET,
+    FALLBACK_AUDIO_BITRATE,
     MIN_VIDEO_BITRATE,
     VIDEO_FFMPEG_TIMEOUT_MS,
+    VIDEO_CRF,
+    VIDEO_PRESET,
 } from "../utils/constants.ts";
 import { getVideoDuration } from "../utils/ffprobe.ts";
 import { registerProcess, unregisterProcess } from "../utils/processTracker.ts";
@@ -58,7 +61,61 @@ function calculateBitrateKbps(
     return { videoKbps, totalKbps, needsScale };
 }
 
-function buildFfmpegArgs(
+/**
+ * Quality-first encode: CRF (visually near-lossless) + copied audio.
+ * No bitrate caps — output is best-effort; if it exceeds the upload limit the
+ * downstream size gate moves it to heavy/.
+ */
+function buildCrfFfmpegArgs(
+    inputPath: string,
+    logoPath: string,
+    outputPath: string,
+    filterComplex: string,
+    audio: "copy" | "aac"
+): string[] {
+    const args = [
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-progress",
+        "pipe:1",
+        "-nostats",
+        "-i",
+        inputPath,
+        "-i",
+        logoPath,
+        "-filter_complex",
+        filterComplex,
+        "-map",
+        "[v]",
+        "-map",
+        "0:a:0?",
+        "-c:v",
+        "libx264",
+        "-crf",
+        String(VIDEO_CRF),
+        "-preset",
+        VIDEO_PRESET,
+        "-pix_fmt",
+        "yuv420p",
+    ];
+
+    if (audio === "copy") {
+        args.push("-c:a", "copy"); // preserve original audio → zero loss
+    } else {
+        args.push("-c:a", "aac", "-b:a", `${FALLBACK_AUDIO_BITRATE}k`);
+    }
+
+    args.push("-movflags", "+faststart", outputPath);
+    return args;
+}
+
+/**
+ * Size/fit encode used by the heavy processor: picks a bitrate from the
+ * duration + MAX_FILE_SIZE budget so the output is guaranteed (roughly) to fit.
+ */
+function buildSizeFfmpegArgs(
     inputPath: string,
     logoPath: string,
     outputPath: string,
@@ -87,13 +144,13 @@ function buildFfmpegArgs(
         "-c:v",
         "libx264",
         "-preset",
-        "fast",
+        VIDEO_PRESET,
         "-b:v",
         `${videoKbps}k`,
         "-maxrate",
         `${totalKbps}k`,
         "-bufsize",
-        `${Math.floor(totalKbps / 2)}k`,
+        `${Math.floor(totalKbps * 2)}k`,
         "-pix_fmt",
         "yuv420p",
         "-c:a",
@@ -176,7 +233,49 @@ async function runFfmpeg(
     });
 }
 
+/**
+ * Quality-first watermark (normal pipeline): CRF near-lossless + copied audio.
+ * Falls back to re-encoding audio (AAC) if the original audio track can't be
+ * remuxed into the output container (e.g. Opus from a WebM source).
+ */
 export async function applyVideoWatermark(
+    logoPath: string,
+    inputPath: string,
+    outputPath: string,
+    logoSize: number
+): Promise<void> {
+    const duration = await getVideoDuration(inputPath);
+    const label = basename(inputPath);
+    const filterComplex = buildFilterComplex(logoSize);
+    const tracker = createProgressTracker(label, duration);
+
+    console.log(`🎬 ${label}: watermarking (crf=${VIDEO_CRF}, preset=${VIDEO_PRESET})...`);
+    try {
+        await runFfmpeg(
+            buildCrfFfmpegArgs(inputPath, logoPath, outputPath, filterComplex, "copy"),
+            label,
+            duration,
+            tracker
+        );
+    } catch {
+        console.log(`🔊 ${label}: audio copy failed, re-encoding audio to AAC...`);
+        const retryTracker = createProgressTracker(label, duration);
+        await runFfmpeg(
+            buildCrfFfmpegArgs(inputPath, logoPath, outputPath, filterComplex, "aac"),
+            label,
+            duration,
+            retryTracker
+        );
+    }
+}
+
+/**
+ * Size/fit-driven watermark (heavy processor): picks a bitrate from the
+ * duration and MAX_FILE_SIZE budget so the output is guaranteed to fit the
+ * upload limit. Downscales as a last resort when the bitrate budget is tiny.
+ */
+
+export async function applyVideoWatermarkForSize(
     logoPath: string,
     inputPath: string,
     outputPath: string,
@@ -198,11 +297,11 @@ export async function applyVideoWatermark(
 
     const filterComplex = buildFilterComplex(logoSize, needsScale ? 0.75 : undefined);
     const label = basename(inputPath);
-
     const tracker = createProgressTracker(label, duration);
-    console.log(`🎬 ${label}: watermarking...`);
+
+    console.log(`🎬 ${label}: watermarking (fit ≤${(maxBytes / (1024 * 1024)).toFixed(0)}MB)...`);
     await runFfmpeg(
-        buildFfmpegArgs(inputPath, logoPath, outputPath, filterComplex, videoKbps, totalKbps),
+        buildSizeFfmpegArgs(inputPath, logoPath, outputPath, filterComplex, videoKbps, totalKbps),
         label,
         duration,
         tracker

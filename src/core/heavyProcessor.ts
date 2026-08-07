@@ -11,6 +11,7 @@ import {
     deleteFile,
     copyFile,
     ensureDirectory,
+    replaceFile,
 } from "../utils/files.ts";
 import { MAX_FILE_SIZE } from "../utils/constants.ts";
 import { unregisterTemp } from "../utils/tempTracker.ts";
@@ -70,8 +71,12 @@ export async function processHeavyFiles(
                     processedTempPath = join(tmpDir, tempName);
                     copyFile(filePath, processedTempPath);
                 } else {
-                    // Process file (watermark + compression for videos)
-                    processedTempPath = await processFile(logoPath, filePath, fileName);
+                    // Process file (watermark + compression for videos).
+                    // fitToSize ensures the encode targets the upload limit so
+                    // the size gate below can actually promote the file.
+                    processedTempPath = await processFile(logoPath, filePath, fileName, {
+                        fitToSize: true,
+                    });
                 }
 
                 // Determine output extension
@@ -82,17 +87,24 @@ export async function processHeavyFiles(
                           ? ".gif"
                           : extname(fileName).toLowerCase() || ".png";
 
-                // Size gate: only promote files that now fit Discord's 10MB limit.
-                // Files that remain oversized stay in heavy/ (original intact) so the
-                // organizer never bounces them back to heavy/ from the root.
+                // Size gate: promote files that now fit the upload limit.
+                // Files that remain oversized are kept in heavy/ but REPLACED by
+                // the watermarked copy, so no heavy/ file is ever left unmarked.
                 const processedStats = getFileStats(processedTempPath);
                 if (!processedStats || processedStats.size > MAX_FILE_SIZE) {
                     const sizeMB = ((processedStats?.size ?? 0) / (1024 * 1024)).toFixed(1);
-                    console.log(
-                        `⏭️ ${fileName} still exceeds 10MB (${sizeMB}MB) after processing, keeping in heavy/`
-                    );
-                    deleteFile(processedTempPath, "Temp file");
+                    const replaced = replaceFile(processedTempPath, filePath);
                     unregisterTemp(processedTempPath);
+                    if (replaced) {
+                        console.warn(
+                            `💡 ${fileName} still exceeds 10MB (${sizeMB}MB), kept watermarked in heavy/`
+                        );
+                    } else {
+                        console.error(
+                            `⚠️ Could not keep watermarked copy, temp cleaned; original stays`
+                        );
+                        deleteFile(processedTempPath, "Temp file");
+                    }
                     continue;
                 }
 

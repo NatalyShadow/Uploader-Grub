@@ -146,9 +146,9 @@ make up FLAGS="--process-heavy"
 **What it does:**
 - Reads all files from each `heavy/` folder (images, videos, GIFs)
 - Applies watermark (unless `--skip-watermark`)
-- Compresses videos to ≤10MB using the same bitrate logic as the main pipeline
+- Compresses videos to ≤10MB using a size/fit encoder (bitrate from duration + the upload limit, with optional downscale) so they fit Discord's limit
 - Moves files that now fit ≤10MB **one level up** (to the folder that contains `heavy/`) so a normal `make up` / `--watch` run organizes them into `videos/`
-- Files that still exceed 10MB are kept in `heavy/` (original intact) — no reprocessing loop
+- Files that still exceed 10MB are kept in `heavy/` **replaced by their watermarked copy** — nothing stays unmarked
 - Deletes originals from `heavy/` only after a successful move
 - **Does not connect to Discord** — no upload, no token needed (but Docker requires it)
 - **No watch mode** — runs once and exits
@@ -204,10 +204,15 @@ files up from `catategory/` (one level above `heavy/`) and moves them to `videos
     └─ 🔁 Loops until SIGINT/SIGTERM
 ```
 
-### 📏 Discord limits
+### 📏 Discord limits & video quality
 
-- **10 MB** per file — oversized files go to `heavy/` for manual handling
-- Videos re-encode with bitrate caps and auto-downscale to fit
+- **Upload limit** (default **10 MB**) — oversized files go to `heavy/` for manual/`--process-heavy` handling. Configurable via `MAX_FILE_SIZE_MB` (raise it if you have Nitro or a boosted server).
+- **Video watermarking** is quality-first over the default pipeline:
+  - **CRF near-lossless** encode (`-crf`, default 20) instead of a hard bitrate cap → keeps visual quality.
+  - **Audio is copied losslessly** (`-c:a copy`) — zero audio loss; only falls back to AAC if the source track can't be remuxed.
+  - Files that still exceed the upload limit after watermarking go to `heavy/`.
+- **`--process-heavy`** uses a size/fit encoder (bitrate from duration + limit, optional downscale) to actually shrink files under the cup.
+- Encode knobs available via env: `VIDEO_CRF`, `VIDEO_PRESET`, `VIDEO_FFMPEG_TIMEOUT_MS`.
 
 ---
 

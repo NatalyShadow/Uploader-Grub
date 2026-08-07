@@ -6,10 +6,18 @@ export const DISCORD_INTENTS = [
     GatewayIntentBits.MessageContent,
 ] as const;
 
-export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB (Discord limit)
+// Discord upload limit (MB). Configurable via env so it can be raised if the
+// account/server allows more (Nitro, boosted server, etc.).
+export const MAX_FILE_SIZE = (parseFloat(process.env.MAX_FILE_SIZE_MB ?? "10") || 10) * 1024 * 1024;
 
-export const AUDIO_BITRATE_TARGET = 64; // kbps
+export const AUDIO_BITRATE_TARGET = 128; // kbps (re-encode used by the size/fit mode)
+export const FALLBACK_AUDIO_BITRATE = 192; // kbps (CRF mode fallback when audio copy fails)
 export const MIN_VIDEO_BITRATE = 300; // kbps before downscaling
+
+// Video encode knobs. CRF: lower = better quality / larger file (18-23 sensible).
+// Preset: slower = better compression efficiency at the cost of CPU time.
+export const VIDEO_CRF = parseInt(process.env.VIDEO_CRF ?? "20", 10) || 20;
+export const VIDEO_PRESET = process.env.VIDEO_PRESET ?? "slow";
 
 export const WATERMARK_MARGIN = 10; // px
 export const WATERMARK_HEIGHT_RATIO = 0.08; // 8% of the longest side
@@ -24,7 +32,8 @@ export const MAX_RETRY_AFTER_MS = 30_000; // ceiling for backoff between send re
 export const SEND_REASON_TOO_LARGE = "too_large";
 
 export const GIF_FFMPEG_TIMEOUT_MS = 60_000;
-export const VIDEO_FFMPEG_TIMEOUT_MS = 120_000;
+export const VIDEO_FFMPEG_TIMEOUT_MS =
+    parseInt(process.env.VIDEO_FFMPEG_TIMEOUT_MS ?? "120000", 10) || 120_000;
 export const FFPROBE_TIMEOUT_MS = 30_000;
 
 export const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".webp", ".avif", ".bmp", ".tiff"] as const;

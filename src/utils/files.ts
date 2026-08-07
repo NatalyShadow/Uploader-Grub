@@ -102,6 +102,38 @@ export function ensureDirectory(path: string): boolean {
     return true;
 }
 
+/**
+ * Moves `source` over `target`, overwriting it (unlike `moveFile`, which
+ * appends a timestamp suffix when the target already exists). Used to keep
+ * the watermarked copy as the new heavy/ file when the output is still
+ * oversized. Falls back to copy+delete on cross-device (EXDEV) moves.
+ */
+export function replaceFile(source: string, target: string): boolean {
+    try {
+        if (existsSync(target)) {
+            unlinkSync(target);
+        }
+        ensureDirectory(parsePath(target).dir);
+        try {
+            renameSync(source, target);
+        } catch (e) {
+            if (e instanceof Error && "code" in e && e.code === "EXDEV") {
+                copyFileSync(source, target);
+                unlinkSync(source);
+            } else {
+                throw e;
+            }
+        }
+        console.log(`♻️ Replaced: ${target} (from ${source})`);
+        return true;
+    } catch (e) {
+        if (e instanceof Error) {
+            console.error(`⚠️ Error replacing file: ${e.message}`);
+        }
+        return false;
+    }
+}
+
 const INVALID_FILENAME_CHARS = /[\\/:*?"<>|]/g;
 
 /**
