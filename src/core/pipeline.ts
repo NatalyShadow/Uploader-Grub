@@ -105,7 +105,7 @@ export async function runPipeline(
             if (!stats?.isFile()) continue;
 
             if (stats.size > MAX_FILE_SIZE) {
-                console.log(`⚠️ Too large: ${fileName}`);
+                moveToHeavy(filePath, path);
                 continue;
             }
 
