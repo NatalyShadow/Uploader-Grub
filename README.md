@@ -40,14 +40,14 @@ Edit it with your own folder paths and Discord channel/thread IDs:
 
 ```json
 [
-  {
-    "path": "$HOME/vanilla/videos",
-    "channelId": "REPLACE_WITH_THREAD_OR_CHANNEL_ID"
-  },
-  {
-    "path": "$HOME/vanilla/images",
-    "channelId": "REPLACE_WITH_THREAD_OR_CHANNEL_ID"
-  }
+    {
+        "path": "$HOME/vanilla/videos",
+        "channelId": "REPLACE_WITH_THREAD_OR_CHANNEL_ID"
+    },
+    {
+        "path": "$HOME/vanilla/images",
+        "channelId": "REPLACE_WITH_THREAD_OR_CHANNEL_ID"
+    }
 ]
 ```
 
@@ -77,12 +77,12 @@ That's it. Files appear, get watermarked, and land in Discord. 🐛✨
 
 ### `.env`
 
-| Variable | Required | Description |
-|----------|:---:|---|
-| `DISCORD_TOKEN` | ✅ | Bot token from Discord Developer Portal |
-| `MEDIA_PATH` | ✅ | Path to your media root on the host machine |
-| `UID` | ❌ | Your host user ID (only needed if you get permission errors) |
-| `GID` | ❌ | Your host group ID (same as above) |
+| Variable        | Required | Description                                                  |
+| --------------- | :------: | ------------------------------------------------------------ |
+| `DISCORD_TOKEN` |    ✅    | Bot token from Discord Developer Portal                      |
+| `MEDIA_PATH`    |    ✅    | Path to your media root on the host machine                  |
+| `UID`           |    ❌    | Your host user ID (only needed if you get permission errors) |
+| `GID`           |    ❌    | Your host group ID (same as above)                           |
 
 ### `config.json`
 
@@ -122,12 +122,12 @@ make build                                       # rebuild image
 make down                                        # stop
 ```
 
-| Flag | Effect |
-|------|--------|
-| `--skip-watermark` | 🌿 Send without watermark |
-| `--move-sent` | 📦 Move originals to `sent/` instead of deleting |
-| `--watch` | 👀 Keep running, process new files as they arrive |
-| `--process-heavy` | 🔄 Process `heavy/` folder with the same quality-first watermarking; move files that now fit the limit up one level, keep oversized ones (already watermarked) in `heavy/` |
+| Flag               | Effect                                                                                                                                                                     |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--skip-watermark` | 🌿 Send without watermark                                                                                                                                                  |
+| `--move-sent`      | 📦 Move originals to `sent/` instead of deleting                                                                                                                           |
+| `--watch`          | 👀 Keep running, process new files as they arrive                                                                                                                          |
+| `--process-heavy`  | 🔄 Process `heavy/` folder with the same quality-first watermarking; move files that now fit the limit up one level, keep oversized ones (already watermarked) in `heavy/` |
 
 ---
 
@@ -144,6 +144,7 @@ make up FLAGS="--process-heavy"
 ```
 
 **What it does:**
+
 - Reads all files from each `heavy/` folder (images, videos, GIFs)
 - Applies watermark (unless `--skip-watermark`)
 - Compresses nothing: videos use the same encode as the normal pipeline — **CRF** (default 20, constant quality) + **audio copied without loss** (only re-encoded to AAC if the container can't take the original codec). No bitrate forcing, no resolution downscale; preset defaults to `fast` to keep CPU/heat low
@@ -154,6 +155,7 @@ make up FLAGS="--process-heavy"
 - **No watch mode** — runs once and exits
 
 **Folder layout after processing:**
+
 ```
 your-media-root/
 └── category/
@@ -207,9 +209,9 @@ your-media-root/
 
 - **Upload limit** (default **10 MB**) — this is a threshold, not a quality target. Files over it are sent to `heavy/` and never have their quality squeezed to fit. Configurable via `MAX_FILE_SIZE_MB` (raise it if you have Nitro or a boosted server).
 - **Video watermarking is quality-first, one single standard** for the normal pipeline and `--process-heavy`:
-  - **CRF near-lossless** encode (`-crf`, default 20) instead of a hard bitrate cap → keeps visual quality constant regardless of video length.
-  - **Audio is copied losslessly** (`-c:a copy`) — zero audio loss; only falls back to AAC if the source track can't be remuxed.
-  - Files that still exceed the upload limit after watermarking stay in `heavy/` as watermarked copies, ready for manual upload.
+    - **CRF near-lossless** encode (`-crf`, default 20) instead of a hard bitrate cap → keeps visual quality constant regardless of video length.
+    - **Audio is copied losslessly** (`-c:a copy`) — zero audio loss; only falls back to AAC if the source track can't be remuxed.
+    - Files that still exceed the upload limit after watermarking stay in `heavy/` as watermarked copies, ready for manual upload.
 - **`--process-heavy`** uses exactly the same quality-first encode — it watermark/re-encodes, promotes the files that now fit the limit, and leaves the rest watermarked in `heavy/`. No size/fit bitrate math, no downscaling.
 - Encode knobs available via env: `VIDEO_CRF`, `VIDEO_PRESET` (default `fast`), `VIDEO_FFMPEG_TIMEOUT_MS` (base timeout; scales with video length, capped at 6h).
 - **Per-file progress counter** — in both the normal upload pipeline and `--process-heavy`, a `🔢 [i/total]` line is printed before each file so you always know how many are left in the folder. Disable with `SHOW_FILE_PROGRESS=0` for quieter logs.
