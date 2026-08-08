@@ -212,6 +212,7 @@ your-media-root/
   - Files that still exceed the upload limit after watermarking stay in `heavy/` as watermarked copies, ready for manual upload.
 - **`--process-heavy`** uses exactly the same quality-first encode — it watermark/re-encodes, promotes the files that now fit the limit, and leaves the rest watermarked in `heavy/`. No size/fit bitrate math, no downscaling.
 - Encode knobs available via env: `VIDEO_CRF`, `VIDEO_PRESET` (default `fast`), `VIDEO_FFMPEG_TIMEOUT_MS` (base timeout; scales with video length, capped at 6h).
+- **Per-file progress counter** — in both the normal upload pipeline and `--process-heavy`, a `🔢 [i/total]` line is printed before each file so you always know how many are left in the folder. Disable with `SHOW_FILE_PROGRESS=0` for quieter logs.
 
 ---
 

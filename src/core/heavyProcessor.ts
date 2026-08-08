@@ -14,7 +14,7 @@ import {
     ensureDirectory,
     replaceFile,
 } from "../utils/files.ts";
-import { MAX_FILE_SIZE } from "../utils/constants.ts";
+import { MAX_FILE_SIZE, SHOW_FILE_PROGRESS } from "../utils/constants.ts";
 import { registerTemp, unregisterTemp } from "../utils/tempTracker.ts";
 import { processFile } from "./pipeline.ts";
 import { getUniqueRoots } from "../setup/index.ts";
@@ -33,18 +33,27 @@ export async function processHeavyFiles(
     for (const root of roots) {
         const heavyDir = join(root, "heavy");
         const files = readDirectory(heavyDir);
+        // Count only regular files so the [i/total] counter ignores subfolders
+        // such as the auto-generated _failed/ quarantine dir.
+        const eligible = files.filter((fileName) =>
+            getFileStats(join(heavyDir, fileName))?.isFile()
+        );
 
-        if (files.length === 0) {
+        if (eligible.length === 0) {
             console.log(`📂 No files in heavy/: ${heavyDir}`);
             continue;
         }
 
-        console.log(`🔄 Processing ${files.length} file(s) from heavy/: ${heavyDir}`);
+        console.log(`🔄 Processing ${eligible.length} file(s) from heavy/: ${heavyDir}`);
 
-        for (const fileName of files) {
+        for (const [index, fileName] of eligible.entries()) {
             const filePath = join(heavyDir, fileName);
             const stats = getFileStats(filePath);
             if (!stats?.isFile()) continue;
+
+            if (SHOW_FILE_PROGRESS) {
+                console.log(`🔢 [${index + 1}/${eligible.length}] ${fileName}`);
+            }
 
             // Determine type
             let processorType: "image" | "gif" | "video" | null = null;

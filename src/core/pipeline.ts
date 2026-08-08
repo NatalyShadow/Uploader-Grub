@@ -3,7 +3,7 @@ import { join, extname, basename, dirname } from "path";
 import { randomUUID } from "crypto";
 import type { Client } from "discord.js";
 
-import { MAX_FILE_SIZE, SEND_REASON_TOO_LARGE } from "../utils/constants.ts";
+import { MAX_FILE_SIZE, SEND_REASON_TOO_LARGE, SHOW_FILE_PROGRESS } from "../utils/constants.ts";
 import {
     readDirectory,
     getFileStats,
@@ -97,9 +97,17 @@ export async function runPipeline(
         if (!channel) continue;
 
         const files = readDirectory(path);
+        // Count only regular files: subfolders (sent/, heavy/, _SKIPPED_…)
+        // are skipped by the loop and would skew the [i/total] counter.
+        const eligible = files.filter((fileName) => getFileStats(join(path, fileName))?.isFile());
+        const total = eligible.length;
 
-        for (const fileName of files) {
+        for (const [index, fileName] of eligible.entries()) {
             const filePath = join(path, fileName);
+
+            if (SHOW_FILE_PROGRESS) {
+                console.log(`🔢 [${index + 1}/${total}] ${fileName}`);
+            }
 
             const stats = getFileStats(filePath);
             if (!stats?.isFile()) continue;

@@ -51,3 +51,8 @@ export const VIDEO_EXTS = [
 export const GIF_EXT = ".gif";
 
 export const UUID_PREFIX = process.env.MEDIA_NAME_PREFIX ?? "";
+
+// Per-folder file progress counter [i/total]. Shown before every file in both
+// the normal upload pipeline and the heavy processing mode. Disable with
+// SHOW_FILE_PROGRESS=0 to get quieter logs.
+export const SHOW_FILE_PROGRESS = process.env.SHOW_FILE_PROGRESS !== "0";
