@@ -160,6 +160,19 @@ export async function runPipeline(
                 } else {
                     console.error(`❌ Error processing ${fileName}:`, err);
                 }
+
+                // Quarantine unprocessable files so they are not retried on
+                // every run (e.g. a corrupt/truncated source). The `_failed`
+                // subfolder is auto-skipped later because the loop only
+                // processes regular files (stats.isFile()).
+                const failedDir = join(path, "_failed");
+                ensureDirectory(failedDir);
+                const quarantined = moveFile(filePath, join(failedDir, fileName));
+                if (quarantined) {
+                    console.error(`📦 Quarantined ${fileName} to ${failedDir}/`);
+                } else {
+                    console.warn(`⚠️ Could not quarantine ${fileName}, keeping in place`);
+                }
             }
         }
     }
