@@ -32,6 +32,29 @@ export default tseslint.config(
         },
     },
     {
-        ignores: ["dist/", "node_modules/", "*.js", "*.cjs", "*.mjs"],
+        // Test files routinely build mocks and spies; the type-aware
+        // unsafe-* rules would otherwise flag every mock fixture.
+        files: ["src/**/*.test.ts"],
+        rules: {
+            "@typescript-eslint/no-unsafe-assignment": "off",
+            "@typescript-eslint/no-unsafe-call": "off",
+            "@typescript-eslint/no-unsafe-member-access": "off",
+            "@typescript-eslint/no-unsafe-argument": "off",
+            "@typescript-eslint/no-unsafe-return": "off",
+            "@typescript-eslint/no-empty-function": "off",
+        },
+    },
+    {
+        ignores: [
+            "dist/",
+            "node_modules/",
+            "*.js",
+            "*.cjs",
+            "*.mjs",
+            // Config files live outside tsconfig `include`, so type-aware
+            // rules would fail to find a matching program for them.
+            "vitest.config.ts",
+            "*.config.ts",
+        ],
     }
 );
