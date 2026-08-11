@@ -3,6 +3,11 @@ import { join } from "path";
 import { expandEnvVars } from "../utils/env.ts";
 import type { ConfigEntry } from "../types/index.ts";
 
+interface RawConfigEntry {
+    path?: unknown;
+    channelId?: unknown;
+}
+
 export function loadConfig(): ConfigEntry[] {
     let raw: string;
     try {
@@ -12,17 +17,42 @@ export function loadConfig(): ConfigEntry[] {
         process.exit(1);
     }
 
-    let parsed: { path: string; channelId: string }[];
+    let parsed: RawConfigEntry[];
     try {
-        parsed = JSON.parse(raw) as { path: string; channelId: string }[];
+        parsed = JSON.parse(raw) as RawConfigEntry[];
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error(`❌ Invalid JSON in config.json: ${msg}`);
         process.exit(1);
     }
 
-    return parsed.map((entry) => ({
-        ...entry,
-        path: expandEnvVars(entry.path),
-    }));
+    if (!Array.isArray(parsed)) {
+        console.error("❌ config.json must contain a JSON array of { path, channelId } entries.");
+        process.exit(1);
+    }
+
+    const entries: ConfigEntry[] = [];
+    for (const entry of parsed) {
+        if (typeof entry.path !== "string" || entry.path.trim() === "") {
+            console.warn('⚠️ config.json entry is missing a valid "path", skipped');
+            continue;
+        }
+        if (typeof entry.channelId !== "string" || entry.channelId.trim() === "") {
+            console.warn(
+                `⚠️ config.json entry is missing a valid "channelId" (path: ${entry.path}), skipped`
+            );
+            continue;
+        }
+        entries.push({
+            path: expandEnvVars(entry.path),
+            channelId: entry.channelId,
+        });
+    }
+
+    if (entries.length === 0) {
+        console.error("❌ config.json has no valid entries.");
+        process.exit(1);
+    }
+
+    return entries;
 }

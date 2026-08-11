@@ -1,4 +1,4 @@
-.PHONY: up down build
+.PHONY: up down build process-heavy
 
 MEDIA_DIR := $(shell grep -oP 'MEDIA_PATH=\K.*' .env 2>/dev/null)
 
@@ -23,6 +23,10 @@ endef
 up:
 	$(ensure-writable)
 	EXTRA_FLAGS="$(FLAGS)" docker compose up
+
+process-heavy:
+	$(ensure-writable)
+	EXTRA_FLAGS="--process-heavy" docker compose up
 
 down:
 	docker compose down

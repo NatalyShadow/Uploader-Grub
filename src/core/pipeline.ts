@@ -3,7 +3,7 @@ import { join, extname, basename, dirname } from "path";
 import { randomUUID } from "crypto";
 import type { Client } from "discord.js";
 
-import { MAX_FILE_SIZE, SEND_REASON_TOO_LARGE } from "../utils/constants.ts";
+import { MAX_FILE_SIZE, SEND_REASON_TOO_LARGE, SHOW_FILE_PROGRESS } from "../utils/constants.ts";
 import {
     readDirectory,
     getFileStats,
@@ -14,7 +14,7 @@ import {
     moveFile,
     ensureDirectory,
 } from "../utils/files.ts";
-import { getVideoDimensions } from "../utils/ffprobe.ts";
+import { getVideoDimensions, getVideoDuration } from "../utils/ffprobe.ts";
 import type { ConfigEntry } from "../types/index.ts";
 
 import { resolveChannel } from "./channel.ts";
@@ -52,7 +52,11 @@ function moveToHeavy(filePath: string, configPath: string): boolean {
     return moved;
 }
 
-async function processFile(logoPath: string, filePath: string, fileName: string): Promise<string> {
+export async function processFile(
+    logoPath: string,
+    filePath: string,
+    fileName: string
+): Promise<string> {
     const tmpDir = os.tmpdir();
     const ext = extname(fileName).toLowerCase();
     const base = basename(fileName, ext).replace(/\s+/g, "_");
@@ -60,26 +64,40 @@ async function processFile(logoPath: string, filePath: string, fileName: string)
     const outputExt = isVideo(fileName) ? ".mp4" : isGif(fileName) ? ".gif" : ext || ".png";
 
     const outputPath = join(tmpDir, `wm_${randomUUID()}_${base}${outputExt}`);
-    registerTemp(outputPath);
 
-    if (isImage(fileName)) {
-        await applyImageWatermark(logoPath, filePath, outputPath);
-        return outputPath;
-    }
-
-    if (isGif(fileName) || isVideo(fileName)) {
-        const dims = await getVideoDimensions(filePath);
-        const logoSize = calculateLogoSize(dims.width, dims.height);
-
-        if (isGif(fileName)) {
-            await applyGifWatermark(logoPath, filePath, outputPath, logoSize);
-        } else {
-            await applyVideoWatermark(logoPath, filePath, outputPath, logoSize, MAX_FILE_SIZE);
+    try {
+        if (isImage(fileName)) {
+            registerTemp(outputPath);
+            await applyImageWatermark(logoPath, filePath, outputPath);
+            return outputPath;
         }
-        return outputPath;
-    }
 
-    return filePath;
+        if (isGif(fileName) || isVideo(fileName)) {
+            registerTemp(outputPath);
+            const dims = await getVideoDimensions(filePath);
+            const logoSize = calculateLogoSize(dims.width, dims.height);
+
+            if (isGif(fileName)) {
+                await applyGifWatermark(logoPath, filePath, outputPath, logoSize);
+            } else {
+                // Probe the duration once so the progress bar and the timeout
+                // scale with the real video length instead of fixed guesses.
+                const duration = await getVideoDuration(filePath);
+                await applyVideoWatermark(logoPath, filePath, outputPath, logoSize, duration);
+            }
+            return outputPath;
+        }
+
+        return filePath;
+    } catch (err) {
+        // Clean up the temp on failure so watermark errors never leak files
+        // in /tmp. The callers (runPipeline / heavyProcessor) only quarantine
+        // the original; they cannot know the temp path, so it is removed here
+        // before the error propagates.
+        unregisterTemp(outputPath);
+        deleteFile(outputPath, "Temp file");
+        throw err;
+    }
 }
 
 export async function runPipeline(
@@ -93,15 +111,23 @@ export async function runPipeline(
         if (!channel) continue;
 
         const files = readDirectory(path);
+        // Count only regular files: subfolders (sent/, heavy/, _SKIPPED_…)
+        // are skipped by the loop and would skew the [i/total] counter.
+        const eligible = files.filter((fileName) => getFileStats(join(path, fileName))?.isFile());
+        const total = eligible.length;
 
-        for (const fileName of files) {
+        for (const [index, fileName] of eligible.entries()) {
             const filePath = join(path, fileName);
+
+            if (SHOW_FILE_PROGRESS) {
+                console.log(`🔢 [${index + 1}/${total}] ${fileName}`);
+            }
 
             const stats = getFileStats(filePath);
             if (!stats?.isFile()) continue;
 
             if (stats.size > MAX_FILE_SIZE) {
-                console.log(`⚠️ Too large: ${fileName}`);
+                moveToHeavy(filePath, path);
                 continue;
             }
 
@@ -147,6 +173,19 @@ export async function runPipeline(
                     console.error(`❌ Error processing ${fileName}:`, err.message);
                 } else {
                     console.error(`❌ Error processing ${fileName}:`, err);
+                }
+
+                // Quarantine unprocessable files so they are not retried on
+                // every run (e.g. a corrupt/truncated source). The `_failed`
+                // subfolder is auto-skipped later because the loop only
+                // processes regular files (stats.isFile()).
+                const failedDir = join(path, "_failed");
+                ensureDirectory(failedDir);
+                const quarantined = moveFile(filePath, join(failedDir, fileName));
+                if (quarantined) {
+                    console.error(`📦 Quarantined ${fileName} to ${failedDir}/`);
+                } else {
+                    console.warn(`⚠️ Could not quarantine ${fileName}, keeping in place`);
                 }
             }
         }

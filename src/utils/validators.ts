@@ -1,26 +1,20 @@
-import { spawn } from "child_process";
+import { runCommand } from "./process.ts";
 
 const CHECK_TIMEOUT_MS = 10_000;
 
-function checkCommand(name: string, args: string[] = ["-version"]): Promise<boolean> {
-    return new Promise((resolve) => {
-        const proc = spawn(name, args, { stdio: "ignore" });
-
-        const timeout = setTimeout(() => {
-            proc.kill("SIGKILL");
-            resolve(false);
-        }, CHECK_TIMEOUT_MS);
-
-        proc.on("error", () => {
-            clearTimeout(timeout);
-            resolve(false);
+async function checkCommand(name: string, args: string[] = ["-version"]): Promise<boolean> {
+    try {
+        await runCommand({
+            command: name,
+            args,
+            timeoutMs: CHECK_TIMEOUT_MS,
+            label: name,
+            stdio: ["ignore", "ignore", "ignore"],
         });
-
-        proc.on("close", (code: number | null) => {
-            clearTimeout(timeout);
-            resolve(code === 0);
-        });
-    });
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 export async function checkFfmpeg(): Promise<boolean> {

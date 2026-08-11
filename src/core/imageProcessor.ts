@@ -1,7 +1,11 @@
 import sharp from "sharp";
 import type { Metadata } from "sharp";
-import { WATERMARK_MARGIN, WATERMARK_OPACITY } from "../utils/constants.ts";
+import { WATERMARK_MARGIN, WATERMARK_OPACITY, SHARP_CONCURRENCY } from "../utils/constants.ts";
 import { calculateLogoSize } from "../utils/watermark.ts";
+
+// Cap libvips' worker pool so image watermarking never spikes all CPU cores
+// at once. `4` (default) keeps fans calm; raise for well-cooled machines.
+sharp.concurrency(SHARP_CONCURRENCY);
 
 export async function applyImageWatermark(
     logoPath: string,
@@ -15,31 +19,37 @@ export async function applyImageWatermark(
 
     const logoWidth = calculateLogoSize(imgW, imgH);
 
-    // 1. Resize logo
-    const logoResized = await sharp(logoPath)
+    // 1. Resize the logo and read back its actual output size (metadata only
+    //    reports the input dims, so `toBuffer({ resolveWithObject: true })`).
+    const resized = await sharp(logoPath)
         .resize({ width: logoWidth, withoutEnlargement: true, fit: "contain" })
         .ensureAlpha()
         .png()
-        .toBuffer();
+        .toBuffer({ resolveWithObject: true });
 
-    // 2. Apply opacity by manipulating alpha channel in raw buffer
-    const { data, info } = await sharp(logoResized).raw().toBuffer({ resolveWithObject: true });
-
-    for (let i = 3; i < data.length; i += 4) {
-        data[i] = Math.round(data[i] * WATERMARK_OPACITY);
-    }
-
-    const logoFinal = await sharp(data, {
-        raw: { width: info.width, height: info.height, channels: 4 },
-    })
+    // 2. Apply opacity natively: `dest-in` keeps the logo where the overlay
+    //    is, scaling the alpha channel by the overlay's own alpha — no manual
+    //    pixel loop, no second raw re-encode.
+    const logoFinal = await sharp(resized.data)
+        .composite([
+            {
+                input: {
+                    create: {
+                        width: resized.info.width,
+                        height: resized.info.height,
+                        channels: 4,
+                        background: { r: 255, g: 255, b: 255, alpha: WATERMARK_OPACITY },
+                    },
+                },
+                blend: "dest-in",
+            },
+        ])
         .png()
         .toBuffer();
 
     // 3. Position: bottom-right corner with margin
-    const logoMeta = await sharp(logoFinal).metadata();
-
-    const left = Math.max(0, imgW - (logoMeta.width || logoWidth) - WATERMARK_MARGIN);
-    const top = Math.max(0, imgH - (logoMeta.height || 60) - WATERMARK_MARGIN);
+    const left = Math.max(0, imgW - resized.info.width - WATERMARK_MARGIN);
+    const top = Math.max(0, imgH - resized.info.height - WATERMARK_MARGIN);
 
     // 4. Composite
     await sharp(inputPath)

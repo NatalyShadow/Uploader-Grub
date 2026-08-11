@@ -6,10 +6,36 @@ export const DISCORD_INTENTS = [
     GatewayIntentBits.MessageContent,
 ] as const;
 
-export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB (Discord limit)
+// Discord upload limit (MB). Configurable via env so it can be raised if the
+// account/server allows more (Nitro, boosted server, etc.).
+export const MAX_FILE_SIZE = (parseFloat(process.env.MAX_FILE_SIZE_MB ?? "10") || 10) * 1024 * 1024;
 
-export const AUDIO_BITRATE_TARGET = 64; // kbps
-export const MIN_VIDEO_BITRATE = 300; // kbps before downscaling
+export const FALLBACK_AUDIO_BITRATE = 192; // kbps (CRF mode fallback when audio copy fails)
+
+// Video encode knobs. CRF: lower = better quality / larger file (18-23 sensible).
+// Preset: slower = better compression efficiency at the cost of CPU time.
+// Default `fast` keeps visual quality (CRF is constant) while avoiding the CPU
+// spikes of slow/veryslow on long files. Set `VIDEO_PRESET=slow` only for
+// maximum compression with the heat/time that comes with it.
+export const VIDEO_CRF = parseInt(process.env.VIDEO_CRF ?? "20", 10) || 20;
+export const VIDEO_PRESET = process.env.VIDEO_PRESET ?? "fast";
+
+// Encode backend: auto (default) detects the best usable encoder at boot,
+// preferring hardware (qsv → vaapi → nvenc → amf) and falling back to libx264.
+// Force a specific one with VIDEO_ENCODER=qsv|vaapi|nvenc|amf|libx264.
+export const VIDEO_ENCODER = process.env.VIDEO_ENCODER ?? "auto";
+
+// Cap libx264 worker threads (0 = let ffmpeg decide). Only affects the
+// software encoder; hardware encoders offload threading to the iGPU/GPU.
+export const VIDEO_FFMPEG_THREADS = parseInt(process.env.VIDEO_FFMPEG_THREADS ?? "0", 10) || 0;
+
+// Linux only: run ffmpeg with `nice -n 10` so watermarking never starves the
+// rest of the system and fans stay calm (slightly slower wall-clock).
+export const USE_NICE = process.platform === "linux" && process.env.VIDEO_NICE === "1";
+
+// sharp (image watermarking) thread pool cap. Lower = less CPU burst on image
+// folders; raise it on well-cooled machines for more throughput.
+export const SHARP_CONCURRENCY = parseInt(process.env.SHARP_CONCURRENCY ?? "4", 10) || 4;
 
 export const WATERMARK_MARGIN = 10; // px
 export const WATERMARK_HEIGHT_RATIO = 0.08; // 8% of the longest side
@@ -24,7 +50,8 @@ export const MAX_RETRY_AFTER_MS = 30_000; // ceiling for backoff between send re
 export const SEND_REASON_TOO_LARGE = "too_large";
 
 export const GIF_FFMPEG_TIMEOUT_MS = 60_000;
-export const VIDEO_FFMPEG_TIMEOUT_MS = 120_000;
+export const VIDEO_FFMPEG_TIMEOUT_MS =
+    parseInt(process.env.VIDEO_FFMPEG_TIMEOUT_MS ?? "120000", 10) || 120_000;
 export const FFPROBE_TIMEOUT_MS = 30_000;
 
 export const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".webp", ".avif", ".bmp", ".tiff"] as const;
@@ -41,3 +68,8 @@ export const VIDEO_EXTS = [
 export const GIF_EXT = ".gif";
 
 export const UUID_PREFIX = process.env.MEDIA_NAME_PREFIX ?? "";
+
+// Per-folder file progress counter [i/total]. Shown before every file in both
+// the normal upload pipeline and the heavy processing mode. Disable with
+// SHOW_FILE_PROGRESS=0 to get quieter logs.
+export const SHOW_FILE_PROGRESS = process.env.SHOW_FILE_PROGRESS !== "0";

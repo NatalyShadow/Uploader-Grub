@@ -10,7 +10,10 @@ import {
 } from "../utils/constants.ts";
 import type { SendResult } from "../types/index.ts";
 
+// Dedup registry of sent files. Bounded so watch-mode sessions (which can run
+// for days) never grow it without limit; evicts the oldest key when full.
 const sentFiles = new Set<string>();
+const SENT_DEDUP_LIMIT = 2000;
 
 export function hasBeenSent(fileName: string): boolean {
     return sentFiles.has(fileName);
@@ -18,6 +21,12 @@ export function hasBeenSent(fileName: string): boolean {
 
 export function markAsSent(fileName: string): void {
     sentFiles.add(fileName);
+    if (sentFiles.size > SENT_DEDUP_LIMIT) {
+        const oldest = sentFiles.values().next().value;
+        if (oldest !== undefined) {
+            sentFiles.delete(oldest);
+        }
+    }
 }
 
 /**

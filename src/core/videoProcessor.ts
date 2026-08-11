@@ -1,85 +1,40 @@
-import { spawn } from "child_process";
 import { basename } from "path";
 import {
     WATERMARK_MARGIN,
     WATERMARK_OPACITY,
-    MAX_FILE_SIZE,
-    AUDIO_BITRATE_TARGET,
-    MIN_VIDEO_BITRATE,
+    FALLBACK_AUDIO_BITRATE,
     VIDEO_FFMPEG_TIMEOUT_MS,
+    VIDEO_CRF,
+    VIDEO_PRESET,
+    USE_NICE,
 } from "../utils/constants.ts";
-import { getVideoDuration } from "../utils/ffprobe.ts";
-import { registerProcess, unregisterProcess } from "../utils/processTracker.ts";
+import { getEncoderInfo, softwareEncoder, type EncoderInfo } from "../utils/encoder.ts";
+import { runCommand, TimeoutError } from "../utils/process.ts";
 import { createProgressTracker } from "../utils/progress.ts";
 
-function buildFilterComplex(logoSize: number, scaleFactor?: number): string {
-    let videoChain = "[0:v]";
-    if (scaleFactor) {
-        videoChain += `scale=trunc(iw*${scaleFactor}/2)*2:trunc(ih*${scaleFactor}/2)*2`;
-    } else {
-        videoChain += "scale=trunc(iw/2)*2:trunc(ih/2)*2";
-    }
-    videoChain += "[base];";
-
+function buildFilterComplex(logoSize: number): string {
     return (
-        videoChain +
+        `[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[base];` +
         `[1:v]scale=${logoSize}:${logoSize}:force_original_aspect_ratio=decrease[logo];` +
         `[logo]format=rgba,colorchannelmixer=aa=${WATERMARK_OPACITY}[wm];` +
         `[base][wm]overlay=W-w-${WATERMARK_MARGIN}:H-h-${WATERMARK_MARGIN}[v]`
     );
 }
 
-function calculateBitrateKbps(
-    maxBytes: number,
-    durationSeconds: number
-): { videoKbps: number; totalKbps: number; needsScale: boolean } {
-    if (durationSeconds <= 0) {
-        return {
-            videoKbps: MIN_VIDEO_BITRATE,
-            totalKbps: MIN_VIDEO_BITRATE + AUDIO_BITRATE_TARGET,
-            needsScale: false,
-        };
-    }
-
-    const totalKbps = Math.floor((maxBytes * 8) / durationSeconds / 1000);
-    let videoKbps = totalKbps - AUDIO_BITRATE_TARGET;
-    const needsScale = videoKbps < MIN_VIDEO_BITRATE;
-
-    if (needsScale) {
-        // When resolution is reduced by 75%, bitrate demand drops roughly 44%
-        // (fewer pixels to encode). Recalculate for lower resolution.
-        const adjustedTotalKbps = Math.floor(totalKbps * 1.4);
-        videoKbps = adjustedTotalKbps - AUDIO_BITRATE_TARGET;
-        if (videoKbps < MIN_VIDEO_BITRATE * 0.5) {
-            videoKbps = Math.floor(MIN_VIDEO_BITRATE * 0.5);
-        }
-    }
-
-    return { videoKbps, totalKbps, needsScale };
-}
-
-export async function applyVideoWatermark(
-    logoPath: string,
+/**
+ * Quality-first encode: CRF (visually near-lossless) + copied audio.
+ * No bitrate caps — output is quality-driven; size will scale with the
+ * source, so long/high-bitrate files land in heavy/ untouched in quality.
+ * The chosen encoder (hardware or software) is injected here.
+ */
+function buildEncodeArgs(
     inputPath: string,
+    logoPath: string,
     outputPath: string,
-    logoSize: number,
-    maxBytes: number = MAX_FILE_SIZE
-): Promise<void> {
-    const duration = await getVideoDuration(inputPath);
-    const { videoKbps, totalKbps, needsScale } = calculateBitrateKbps(maxBytes, duration);
-
-    if (needsScale) {
-        console.log(
-            `📐 ${inputPath} needs scale 75% (bitrate ${videoKbps}kbps < ${MIN_VIDEO_BITRATE}kbps)`
-        );
-    } else {
-        console.log(
-            `🎯 ${inputPath} bitrate target: video=${videoKbps}kbps total=${totalKbps}kbps`
-        );
-    }
-
-    const filterComplex = buildFilterComplex(logoSize, needsScale ? 0.75 : undefined);
-
+    filterComplex: string,
+    audio: "copy" | "aac",
+    enc: EncoderInfo
+): string[] {
     const args = [
         "-y",
         "-hide_banner",
@@ -88,99 +43,126 @@ export async function applyVideoWatermark(
         "-progress",
         "pipe:1",
         "-nostats",
+        ...enc.initArgs,
         "-i",
         inputPath,
         "-i",
         logoPath,
         "-filter_complex",
-        filterComplex,
+        filterComplex + enc.filterTail,
         "-map",
-        "[v]",
+        `[${enc.outLabel}]`,
         "-map",
-        "0:a?",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "fast",
-        "-b:v",
-        `${videoKbps}k`,
-        "-maxrate",
-        `${totalKbps}k`,
-        "-bufsize",
-        `${Math.floor(totalKbps / 2)}k`,
-        "-pix_fmt",
-        "yuv420p",
-        "-c:a",
-        "aac",
-        "-b:a",
-        `${AUDIO_BITRATE_TARGET}k`,
-        "-movflags",
-        "+faststart",
-        outputPath,
+        "0:a:0?",
+        ...enc.encoderArgs(VIDEO_CRF, VIDEO_PRESET),
     ];
 
-    return new Promise((resolve, reject) => {
-        const ffmpeg = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
-        registerProcess(ffmpeg);
+    if (audio === "copy") {
+        args.push("-c:a", "copy"); // preserve original audio → zero loss
+    } else {
+        args.push("-c:a", "aac", "-b:a", `${FALLBACK_AUDIO_BITRATE}k`);
+    }
 
-        const tracker = createProgressTracker(basename(inputPath), duration);
+    args.push("-movflags", "+faststart", outputPath);
+    return args;
+}
 
-        let progressBuffer = "";
-        ffmpeg.stdout.on("data", (chunk: Buffer) => {
-            progressBuffer += chunk.toString();
-            const lines = progressBuffer.split("\n");
-            progressBuffer = lines.pop() ?? "";
-            for (const line of lines) {
-                const match = /^out_time_us=(\d+)/.exec(line);
-                if (match) {
-                    tracker.update(parseInt(match[1], 10) / 1_000_000);
+/**
+ * Run a single ffmpeg attempt, parsing `-progress` output into the tracker.
+ * Scale the timeout with the video length so long files are not killed
+ * mid-encode: at least the configured base, ~2x the duration, capped at 6h
+ * so a stuck encode still always aborts.
+ */
+async function runFfmpeg(
+    args: string[],
+    label: string,
+    duration: number,
+    tracker: ReturnType<typeof createProgressTracker>
+): Promise<void> {
+    let progressBuffer = "";
+
+    try {
+        await runCommand({
+            command: "ffmpeg",
+            args,
+            nice: USE_NICE ? 10 : undefined,
+            timeoutMs: Math.max(
+                VIDEO_FFMPEG_TIMEOUT_MS,
+                Math.min(duration * 1000 * 2 + 60_000, 6 * 60 * 60 * 1000)
+            ),
+            label,
+            maxStderrChars: 4096,
+            onStdout(chunk: string) {
+                progressBuffer += chunk;
+                const lines = progressBuffer.split("\n");
+                progressBuffer = lines.pop() ?? "";
+                for (const line of lines) {
+                    const match = /^out_time_us=(\d+)/.exec(line);
+                    if (match) {
+                        tracker.update(parseInt(match[1], 10) / 1_000_000);
+                    }
                 }
-            }
+            },
         });
+        tracker.complete();
+    } catch (err) {
+        tracker.fail();
+        throw err;
+    }
+}
 
-        let stderrBuffer = "";
-        ffmpeg.stderr.on("data", (chunk: Buffer) => {
-            stderrBuffer += chunk.toString();
-            // Keep only the last 4KB to avoid unbounded growth
-            if (stderrBuffer.length > 4096) {
-                stderrBuffer = stderrBuffer.slice(-4096);
-            }
-        });
+/**
+ * Quality-first watermark (single standard, used by the normal pipeline and the
+ * heavy processor): CRF near-lossless + copied audio. Uses the auto-detected
+ * hardware encoder when available (iGPU/GPU, far cooler and faster); falls back
+ * to software libx264 if the hardware attempt fails (unsupported input/audio).
+ * Falls back to re-encoding audio (AAC) if the original audio track can't be
+ * remuxed into the output container (e.g. Opus from a WebM source). Timeouts
+ * are NOT retried: a timeout is a resource problem, not a codec issue.
+ */
+export async function applyVideoWatermark(
+    logoPath: string,
+    inputPath: string,
+    outputPath: string,
+    logoSize: number,
+    duration: number
+): Promise<void> {
+    const label = basename(inputPath);
+    const filterComplex = buildFilterComplex(logoSize);
+    const enc = await getEncoderInfo();
 
-        const timeout = setTimeout(() => {
-            console.error(
-                `⏱️ Video processing timed out after ${VIDEO_FFMPEG_TIMEOUT_MS / 1000}s, killing ffmpeg...`
-            );
-            tracker.fail();
+    console.log(
+        `🎬 ${label}: watermarking (encoder=${enc.backend}, crf=${VIDEO_CRF}, preset=${VIDEO_PRESET})...`
+    );
+
+    const attempt = (audio: "copy" | "aac", encoder: EncoderInfo): Promise<void> =>
+        runFfmpeg(
+            buildEncodeArgs(inputPath, logoPath, outputPath, filterComplex, audio, encoder),
+            label,
+            duration,
+            createProgressTracker(label, duration)
+        );
+
+    try {
+        await attempt("copy", enc);
+    } catch (err) {
+        if (err instanceof TimeoutError) throw err;
+
+        if (enc.backend !== "libx264") {
+            // Hardware attempt failed (input/codec not supported): retry once
+            // with the software encoder before giving up.
+            console.log(`🔁 ${label}: ${enc.backend} encode failed, retrying with libx264...`);
+            const sw = softwareEncoder();
             try {
-                ffmpeg.kill("SIGKILL");
-            } catch {
-                // ignore
+                await attempt("copy", sw);
+            } catch (err2) {
+                if (err2 instanceof TimeoutError) throw err2;
+                console.log(`🔊 ${label}: audio copy failed, re-encoding audio to AAC...`);
+                await attempt("aac", sw);
             }
-            unregisterProcess(ffmpeg);
-            reject(new Error("Video processing timed out"));
-        }, VIDEO_FFMPEG_TIMEOUT_MS);
-
-        ffmpeg.on("error", (err) => {
-            clearTimeout(timeout);
-            unregisterProcess(ffmpeg);
-            tracker.fail();
-            reject(err);
-        });
-
-        ffmpeg.on("close", (code: number | null) => {
-            clearTimeout(timeout);
-            unregisterProcess(ffmpeg);
-            if (code === 0) {
-                tracker.complete();
-                resolve();
-            } else {
-                tracker.fail();
-                if (stderrBuffer) {
-                    console.error(`stderr: ${stderrBuffer.slice(-500)}`);
-                }
-                reject(new Error(`ffmpeg exited with code ${code}`));
-            }
-        });
-    });
+        } else {
+            console.log(`🔊 ${label}: audio copy failed, re-encoding audio to AAC...`);
+            await attempt("aac", enc);
+        }
+    }
 }
