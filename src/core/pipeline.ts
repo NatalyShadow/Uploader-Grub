@@ -64,26 +64,37 @@ export async function processFile(
     const outputExt = isVideo(fileName) ? ".mp4" : isGif(fileName) ? ".gif" : ext || ".png";
 
     const outputPath = join(tmpDir, `wm_${randomUUID()}_${base}${outputExt}`);
-    registerTemp(outputPath);
 
-    if (isImage(fileName)) {
-        await applyImageWatermark(logoPath, filePath, outputPath);
-        return outputPath;
-    }
-
-    if (isGif(fileName) || isVideo(fileName)) {
-        const dims = await getVideoDimensions(filePath);
-        const logoSize = calculateLogoSize(dims.width, dims.height);
-
-        if (isGif(fileName)) {
-            await applyGifWatermark(logoPath, filePath, outputPath, logoSize);
-        } else {
-            await applyVideoWatermark(logoPath, filePath, outputPath, logoSize);
+    try {
+        if (isImage(fileName)) {
+            registerTemp(outputPath);
+            await applyImageWatermark(logoPath, filePath, outputPath);
+            return outputPath;
         }
-        return outputPath;
-    }
 
-    return filePath;
+        if (isGif(fileName) || isVideo(fileName)) {
+            registerTemp(outputPath);
+            const dims = await getVideoDimensions(filePath);
+            const logoSize = calculateLogoSize(dims.width, dims.height);
+
+            if (isGif(fileName)) {
+                await applyGifWatermark(logoPath, filePath, outputPath, logoSize);
+            } else {
+                await applyVideoWatermark(logoPath, filePath, outputPath, logoSize);
+            }
+            return outputPath;
+        }
+
+        return filePath;
+    } catch (err) {
+        // Clean up the temp on failure so watermark errors never leak files
+        // in /tmp. The callers (runPipeline / heavyProcessor) only quarantine
+        // the original; they cannot know the temp path, so it is removed here
+        // before the error propagates.
+        unregisterTemp(outputPath);
+        deleteFile(outputPath, "Temp file");
+        throw err;
+    }
 }
 
 export async function runPipeline(

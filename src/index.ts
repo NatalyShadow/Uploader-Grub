@@ -88,6 +88,7 @@ async function main(): Promise<void> {
         runSetup(config);
 
         await processHeavyFiles(config, logoPath, { skipWatermark: options.skipWatermark });
+        cleanupAllTemps();
         process.exit(0);
     }
 
@@ -121,6 +122,7 @@ async function main(): Promise<void> {
                     return;
                 }
                 void client!.destroy();
+                cleanupAllTemps();
                 process.exit(0);
             })
             .catch((err) => {
