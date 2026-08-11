@@ -1,4 +1,3 @@
-import { spawn } from "child_process";
 import { basename } from "path";
 import {
     WATERMARK_MARGIN,
@@ -6,7 +5,7 @@ import {
     GIF_FFMPEG_TIMEOUT_MS,
     USE_NICE,
 } from "../utils/constants.ts";
-import { registerProcess, unregisterProcess } from "../utils/processTracker.ts";
+import { runCommand } from "../utils/process.ts";
 
 export function applyGifWatermark(
     logoPath: string,
@@ -16,77 +15,37 @@ export function applyGifWatermark(
 ): Promise<void> {
     const label = basename(inputPath);
 
-    return new Promise((resolve, reject) => {
-        const args = [
-            "-y",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-nostats",
-            "-i",
-            inputPath,
-            "-i",
-            logoPath,
-            "-filter_complex",
-            `[0:v]scale=iw:ih:flags=fast_bilinear[gif_norm];` +
-                `[1:v]scale=${logoSize}:${logoSize}:force_original_aspect_ratio=decrease[logo];` +
-                `[logo]format=rgba,colorchannelmixer=aa=${WATERMARK_OPACITY}[wm];` +
-                `[gif_norm][wm]overlay=W-w-${WATERMARK_MARGIN}:H-h-${WATERMARK_MARGIN}[overlaid];` +
-                `[overlaid]split[s0][s1];` +
-                `[s0]palettegen=max_colors=256:stats_mode=single[palette];` +
-                `[s1][palette]paletteuse=dither=bayer:bayer_scale=3`,
-            outputPath,
-        ];
+    const args = [
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-nostats",
+        "-i",
+        inputPath,
+        "-i",
+        logoPath,
+        "-filter_complex",
+        `[0:v]scale=iw:ih:flags=fast_bilinear[gif_norm];` +
+            `[1:v]scale=${logoSize}:${logoSize}:force_original_aspect_ratio=decrease[logo];` +
+            `[logo]format=rgba,colorchannelmixer=aa=${WATERMARK_OPACITY}[wm];` +
+            `[gif_norm][wm]overlay=W-w-${WATERMARK_MARGIN}:H-h-${WATERMARK_MARGIN}[overlaid];` +
+            `[overlaid]split[s0][s1];` +
+            `[s0]palettegen=max_colors=256:stats_mode=single[palette];` +
+            `[s1][palette]paletteuse=dither=bayer:bayer_scale=3`,
+        outputPath,
+    ];
 
-        const ffmpeg = USE_NICE
-            ? spawn("nice", ["-n", "10", "ffmpeg", ...args], { stdio: ["ignore", "pipe", "pipe"] })
-            : spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
-        registerProcess(ffmpeg);
+    console.log(`⏳ Processing GIF: ${label}...`);
 
-        console.log(`⏳ Procesando GIF: ${label}...`);
-
-        let stderrBuffer = "";
-        ffmpeg.stderr.on("data", (chunk: Buffer) => {
-            stderrBuffer += chunk.toString();
-            if (stderrBuffer.length > 4096) {
-                stderrBuffer = stderrBuffer.slice(-4096);
-            }
-        });
-
-        const timeout = setTimeout(() => {
-            console.error(
-                `⏱️ GIF processing timed out after ${GIF_FFMPEG_TIMEOUT_MS / 1000}s, killing ffmpeg...`
-            );
-            try {
-                ffmpeg.kill("SIGKILL");
-            } catch {
-                // ignore
-            }
-            unregisterProcess(ffmpeg);
-            console.log(`❌ ${label} falló (timeout)`);
-            reject(new Error("GIF processing timed out"));
-        }, GIF_FFMPEG_TIMEOUT_MS);
-
-        ffmpeg.on("error", (err) => {
-            clearTimeout(timeout);
-            unregisterProcess(ffmpeg);
-            console.log(`❌ ${label} falló`);
-            reject(err);
-        });
-
-        ffmpeg.on("close", (code: number | null) => {
-            clearTimeout(timeout);
-            unregisterProcess(ffmpeg);
-            if (code === 0) {
-                console.log(`✅ ${label} listo`);
-                resolve();
-            } else {
-                console.log(`❌ ${label} falló`);
-                if (stderrBuffer) {
-                    console.error(`stderr: ${stderrBuffer.slice(-500)}`);
-                }
-                reject(new Error(`ffmpeg exited with code ${code}`));
-            }
-        });
+    return runCommand({
+        command: "ffmpeg",
+        args,
+        nice: USE_NICE ? 10 : undefined,
+        timeoutMs: GIF_FFMPEG_TIMEOUT_MS,
+        label: `GIF ${label}`,
+        maxStderrChars: 4096,
+    }).then(() => {
+        console.log(`✅ ${label} done`);
     });
 }

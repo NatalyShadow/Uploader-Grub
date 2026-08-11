@@ -1,49 +1,21 @@
-import { spawn } from "child_process";
 import { FFPROBE_TIMEOUT_MS } from "./constants.ts";
-import { registerProcess, unregisterProcess } from "./processTracker.ts";
+import { runCommand } from "./process.ts";
 import type { Dimensions } from "../types/index.ts";
 
-function spawnFfprobe(args: string[]): Promise<string> {
-    return new Promise((resolve, reject) => {
-        let output = "";
-        const proc = spawn("ffprobe", args);
-        registerProcess(proc);
-
-        const timeout = setTimeout(() => {
-            console.error(`⏱️ ffprobe timed out after ${FFPROBE_TIMEOUT_MS / 1000}s, killing...`);
-            try {
-                proc.kill("SIGKILL");
-            } catch {
-                // ignore
-            }
-            unregisterProcess(proc);
-            reject(new Error("ffprobe timed out"));
-        }, FFPROBE_TIMEOUT_MS);
-
-        proc.stdout.on("data", (data: Buffer) => {
-            output += data.toString();
-        });
-
-        proc.on("error", (err) => {
-            clearTimeout(timeout);
-            unregisterProcess(proc);
-            reject(err);
-        });
-
-        proc.on("close", (code: number | null) => {
-            clearTimeout(timeout);
-            unregisterProcess(proc);
-            if (code !== 0) {
-                reject(new Error(`ffprobe exited with code ${code}`));
-                return;
-            }
-            resolve(output.trim());
-        });
+async function probe(args: string[]): Promise<string> {
+    const { stdout } = await runCommand({
+        command: "ffprobe",
+        args,
+        timeoutMs: FFPROBE_TIMEOUT_MS,
+        label: "ffprobe",
+        maxStdoutChars: 4096,
+        maxStderrChars: 1024,
     });
+    return stdout.trim();
 }
 
 export async function getVideoDimensions(inputPath: string): Promise<Dimensions> {
-    const output = await spawnFfprobe([
+    const output = await probe([
         "-v",
         "error",
         "-select_streams",
@@ -63,7 +35,7 @@ export async function getVideoDimensions(inputPath: string): Promise<Dimensions>
 }
 
 export async function getVideoDuration(inputPath: string): Promise<number> {
-    const output = await spawnFfprobe([
+    const output = await probe([
         "-v",
         "error",
         "-select_streams",

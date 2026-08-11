@@ -66,16 +66,16 @@ export function createProgressTracker(label: string, totalSeconds: number): Prog
 
     // No known duration — fall back to a static log, no bar
     if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
-        console.log(`\u23F3 Procesando ${shortLabel}...`);
+        console.log(`⏳ Processing ${shortLabel}...`);
         return {
             update() {
                 // no-op
             },
             complete() {
-                console.log(`\u2705 ${shortLabel} listo`);
+                console.log(`✅ ${shortLabel} done`);
             },
             fail() {
-                console.log(`\u274C ${shortLabel} fall\u00F3`);
+                console.log(`❌ ${shortLabel} failed`);
             },
         };
     }
@@ -105,13 +105,13 @@ export function createProgressTracker(label: string, totalSeconds: number): Prog
             if (finished) return;
             finished = true;
             writer.finish(buildLine(100, totalTime));
-            console.log(`\u2705 ${shortLabel} listo (${totalTime})`);
+            console.log(`✅ ${shortLabel} done (${totalTime})`);
         },
         fail() {
             if (finished) return;
             finished = true;
             writer.clear();
-            console.log(`\u274C ${shortLabel} fall\u00F3`);
+            console.log(`❌ ${shortLabel} failed`);
         },
     };
 }

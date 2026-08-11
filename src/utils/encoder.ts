@@ -1,4 +1,4 @@
-import { spawnSync } from "child_process";
+import { spawn } from "child_process";
 import { existsSync } from "fs";
 import { VIDEO_ENCODER, VIDEO_FFMPEG_THREADS } from "./constants.ts";
 
@@ -13,7 +13,7 @@ export interface EncoderInfo {
     initArgs: string[];
     /**
      * Tail appended to the filter_complex to prepare frames for the encoder
-     * (e.g. `[v]format=nv12,hwupload[vhw]`). Empty for software encoding.
+     * (e.g. `;[v]format=nv12,hwupload[vhw]`). Empty for software encoding.
      */
     filterTail: string;
     /** Label produced by the filter graph that the encoder maps. */
@@ -27,27 +27,7 @@ const VAAPI_DEVICE = "/dev/dri/renderD128";
 /** Detection priority: hardware first, software always last. */
 const PRIORITY: EncoderBackend[] = ["qsv", "vaapi", "nvenc", "amf", "libx264"];
 
-let encodersCache: Set<string> | null = null;
-let encoderInfoCache: EncoderInfo | null = null;
-
-/** Parses `ffmpeg -encoders` once and caches the set of available encoder names. */
-function listFfmpegEncoders(): Set<string> {
-    if (encodersCache) return encodersCache;
-
-    const set = new Set<string>();
-    try {
-        const result = spawnSync("ffmpeg", ["-hide_banner", "-encoders"], { encoding: "utf8" });
-        for (const line of (result.stdout ?? "").split("\n")) {
-            const match = /^\s+[AVS]\S*\s+([a-zA-Z0-9_]+)\s/.exec(line);
-            if (match) set.add(match[1]);
-        }
-    } catch {
-        // ffmpeg missing: leave the set empty, caller falls back to software
-    }
-
-    encodersCache = set;
-    return set;
-}
+let encoderInfoPromise: Promise<EncoderInfo> | null = null;
 
 function encoderName(backend: EncoderBackend): string {
     switch (backend) {
@@ -224,42 +204,70 @@ function isBackend(value: string): value is EncoderBackend {
     );
 }
 
+/** Runs `ffmpeg -encoders` once, returning the set of available encoder names. */
+function listFfmpegEncoders(): Promise<Set<string>> {
+    return new Promise((resolve) => {
+        let output = "";
+        const proc = spawn("ffmpeg", ["-hide_banner", "-encoders"], {
+            stdio: ["ignore", "pipe", "pipe"],
+        });
+        proc.stdout?.on("data", (chunk: Buffer) => {
+            output += chunk.toString();
+        });
+        proc.on("error", () => resolve(new Set()));
+        proc.on("close", (code: number | null) => {
+            if (code !== 0) {
+                resolve(new Set());
+                return;
+            }
+            const set = new Set<string>();
+            for (const line of output.split("\n")) {
+                const match = /^\s+[AVS]\S*\s+([a-zA-Z0-9_]+)\s/.exec(line);
+                if (match) set.add(match[1]);
+            }
+            resolve(set);
+        });
+    });
+}
+
 /**
  * Checks that a hardware encoder is actually usable: the encoder must exist in
  * ffmpeg, the DRM render node must be present (qsv/vaapi) and a micro-encode
  * must succeed (catches missing drivers/devices, so Docker hosts without
  * hardware passthrough degrade cleanly to software).
  */
-function validateBackend(backend: EncoderBackend): boolean {
+async function validateBackend(backend: EncoderBackend): Promise<boolean> {
     if (backend === "libx264") return true;
 
-    if (!listFfmpegEncoders().has(encoderName(backend))) return false;
+    if (!(await listFfmpegEncoders()).has(encoderName(backend))) return false;
 
     if ((backend === "qsv" || backend === "vaapi") && !existsSync(VAAPI_DEVICE)) return false;
 
-    try {
-        const result = spawnSync("ffmpeg", validationArgs(backend), {
-            timeout: 10_000,
-            stdio: "ignore",
+    return new Promise((resolve) => {
+        const proc = spawn("ffmpeg", validationArgs(backend), { stdio: "ignore" });
+        const timeout = setTimeout(() => {
+            try {
+                proc.kill("SIGKILL");
+            } catch {
+                // ignore
+            }
+            resolve(false);
+        }, 10_000);
+        proc.on("error", () => {
+            clearTimeout(timeout);
+            resolve(false);
         });
-        return result.status === 0;
-    } catch {
-        return false;
-    }
+        proc.on("close", (code: number | null) => {
+            clearTimeout(timeout);
+            resolve(code === 0);
+        });
+    });
 }
 
-/**
- * Returns the best usable video encoder for this machine, cached for the
- * whole process. Priority: qsv → vaapi → nvenc → amf → libx264 (software is
- * always the last resort). Override with VIDEO_ENCODER (qsv|vaapi|nvenc|amf|libx264).
- */
-export function getEncoderInfo(): EncoderInfo {
-    if (encoderInfoCache) return encoderInfoCache;
-
+async function resolveEncoderInfo(): Promise<EncoderInfo> {
     if (VIDEO_ENCODER !== "auto") {
-        if (isBackend(VIDEO_ENCODER) && validateBackend(VIDEO_ENCODER)) {
-            encoderInfoCache = buildInfo(VIDEO_ENCODER);
-            return encoderInfoCache;
+        if (isBackend(VIDEO_ENCODER) && (await validateBackend(VIDEO_ENCODER))) {
+            return buildInfo(VIDEO_ENCODER);
         }
         console.warn(
             `⚠️ VIDEO_ENCODER=${VIDEO_ENCODER} is not usable, falling back to auto-detect`
@@ -267,15 +275,24 @@ export function getEncoderInfo(): EncoderInfo {
     }
 
     for (const backend of PRIORITY) {
-        if (validateBackend(backend)) {
-            encoderInfoCache = buildInfo(backend);
-            return encoderInfoCache;
+        if (await validateBackend(backend)) {
+            return buildInfo(backend);
         }
     }
 
     // Unreachable in practice: libx264 always validates.
-    encoderInfoCache = buildInfo("libx264");
-    return encoderInfoCache;
+    return buildInfo("libx264");
+}
+
+/**
+ * Returns the best usable video encoder for this machine, cached for the
+ * whole process. Priority: qsv → vaapi → nvenc → amf → libx264 (software is
+ * always the last resort). Override with VIDEO_ENCODER (qsv|vaapi|nvenc|amf|libx264).
+ * Async so the boot-time micro-encodes never block the event loop.
+ */
+export function getEncoderInfo(): Promise<EncoderInfo> {
+    encoderInfoPromise ??= resolveEncoderInfo();
+    return encoderInfoPromise;
 }
 
 /** The software fallback encoder, used when a hardware attempt fails at encode time. */

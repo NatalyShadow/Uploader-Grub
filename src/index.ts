@@ -42,6 +42,16 @@ function shutdown(signal: string): void {
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
+/** Logs the detected video encoder once (hardware vs software). */
+async function logVideoEncoder(): Promise<void> {
+    const enc = await getEncoderInfo();
+    if (enc.backend === "libx264") {
+        console.log("🧠 Video encoding: software (libx264). Enable hardware via VIDEO_ENCODER.");
+    } else {
+        console.log(`⚡ Video encoding: hardware (${enc.backend}).`);
+    }
+}
+
 async function main(): Promise<void> {
     const args = process.argv.slice(2);
     const options = {
@@ -83,14 +93,7 @@ async function main(): Promise<void> {
                 console.error("❌ ffmpeg not found. Please install ffmpeg.");
                 process.exit(1);
             }
-            const enc = getEncoderInfo();
-            if (enc.backend === "libx264") {
-                console.log(
-                    "🧠 Video encoding: software (libx264). Enable hardware via VIDEO_ENCODER."
-                );
-            } else {
-                console.log(`⚡ Video encoding: hardware (${enc.backend}).`);
-            }
+            await logVideoEncoder();
         }
 
         const config = loadConfig();
@@ -113,14 +116,7 @@ async function main(): Promise<void> {
             console.error("❌ ffmpeg not found. Please install ffmpeg.");
             process.exit(1);
         }
-        const enc = getEncoderInfo();
-        if (enc.backend === "libx264") {
-            console.log(
-                "🧠 Video encoding: software (libx264). Enable hardware via VIDEO_ENCODER."
-            );
-        } else {
-            console.log(`⚡ Video encoding: hardware (${enc.backend}).`);
-        }
+        await logVideoEncoder();
     }
 
     const config = loadConfig();
