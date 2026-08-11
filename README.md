@@ -211,9 +211,10 @@ your-media-root/
 - **Video watermarking is quality-first, one single standard** for the normal pipeline and `--process-heavy`:
     - **CRF near-lossless** encode (`-crf`, default 20) instead of a hard bitrate cap → keeps visual quality constant regardless of video length.
     - **Audio is copied losslessly** (`-c:a copy`) — zero audio loss; only falls back to AAC if the source track can't be remuxed.
+    - **Hardware-accelerated by default** — at boot the pipeline picks the best usable encoder (`qsv` → `vaapi` → `nvenc` → `amf` → `libx264`), offloading H.264 encoding to the iGPU/GPU for far less CPU, heat and wall time. If the hardware attempt fails on a specific file it retries with software `libx264` automatically. Override with `VIDEO_ENCODER`.
     - Files that still exceed the upload limit after watermarking stay in `heavy/` as watermarked copies, ready for manual upload.
 - **`--process-heavy`** uses exactly the same quality-first encode — it watermark/re-encodes, promotes the files that now fit the limit, and leaves the rest watermarked in `heavy/`. No size/fit bitrate math, no downscaling.
-- Encode knobs available via env: `VIDEO_CRF`, `VIDEO_PRESET` (default `fast`), `VIDEO_FFMPEG_TIMEOUT_MS` (base timeout; scales with video length, capped at 6h).
+- Encode knobs available via env: `VIDEO_CRF`, `VIDEO_PRESET` (default `fast`), `VIDEO_FFMPEG_TIMEOUT_MS` (base timeout; scales with video length, capped at 6h), `VIDEO_ENCODER` (default `auto`), `VIDEO_FFMPEG_THREADS` (cap for software encode threads), `VIDEO_NICE=1` (Linux: run ffmpeg at `nice -n 10` to keep fans calm) and `SHARP_CONCURRENCY` (image watermark worker pool, default 4).
 - **Per-file progress counter** — in both the normal upload pipeline and `--process-heavy`, a `🔢 [i/total]` line is printed before each file so you always know how many are left in the folder. Disable with `SHOW_FILE_PROGRESS=0` for quieter logs.
 
 ---

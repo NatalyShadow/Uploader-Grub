@@ -14,7 +14,7 @@ import {
     moveFile,
     ensureDirectory,
 } from "../utils/files.ts";
-import { getVideoDimensions } from "../utils/ffprobe.ts";
+import { getVideoDimensions, getVideoDuration } from "../utils/ffprobe.ts";
 import type { ConfigEntry } from "../types/index.ts";
 
 import { resolveChannel } from "./channel.ts";
@@ -80,7 +80,10 @@ export async function processFile(
             if (isGif(fileName)) {
                 await applyGifWatermark(logoPath, filePath, outputPath, logoSize);
             } else {
-                await applyVideoWatermark(logoPath, filePath, outputPath, logoSize);
+                // Probe the duration once so the progress bar and the timeout
+                // scale with the real video length instead of fixed guesses.
+                const duration = await getVideoDuration(filePath);
+                await applyVideoWatermark(logoPath, filePath, outputPath, logoSize, duration);
             }
             return outputPath;
         }

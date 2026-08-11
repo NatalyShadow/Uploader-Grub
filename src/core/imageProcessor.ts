@@ -1,7 +1,11 @@
 import sharp from "sharp";
 import type { Metadata } from "sharp";
-import { WATERMARK_MARGIN, WATERMARK_OPACITY } from "../utils/constants.ts";
+import { WATERMARK_MARGIN, WATERMARK_OPACITY, SHARP_CONCURRENCY } from "../utils/constants.ts";
 import { calculateLogoSize } from "../utils/watermark.ts";
+
+// Cap libvips' worker pool so image watermarking never spikes all CPU cores
+// at once. `4` (default) keeps fans calm; raise for well-cooled machines.
+sharp.concurrency(SHARP_CONCURRENCY);
 
 export async function applyImageWatermark(
     logoPath: string,

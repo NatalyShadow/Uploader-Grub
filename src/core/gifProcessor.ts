@@ -1,6 +1,11 @@
 import { spawn } from "child_process";
 import { basename } from "path";
-import { WATERMARK_MARGIN, WATERMARK_OPACITY, GIF_FFMPEG_TIMEOUT_MS } from "../utils/constants.ts";
+import {
+    WATERMARK_MARGIN,
+    WATERMARK_OPACITY,
+    GIF_FFMPEG_TIMEOUT_MS,
+    USE_NICE,
+} from "../utils/constants.ts";
 import { registerProcess, unregisterProcess } from "../utils/processTracker.ts";
 
 export function applyGifWatermark(
@@ -33,7 +38,9 @@ export function applyGifWatermark(
             outputPath,
         ];
 
-        const ffmpeg = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
+        const ffmpeg = USE_NICE
+            ? spawn("nice", ["-n", "10", "ffmpeg", ...args], { stdio: ["ignore", "pipe", "pipe"] })
+            : spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
         registerProcess(ffmpeg);
 
         console.log(`⏳ Procesando GIF: ${label}...`);

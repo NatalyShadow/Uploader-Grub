@@ -20,6 +20,23 @@ export const FALLBACK_AUDIO_BITRATE = 192; // kbps (CRF mode fallback when audio
 export const VIDEO_CRF = parseInt(process.env.VIDEO_CRF ?? "20", 10) || 20;
 export const VIDEO_PRESET = process.env.VIDEO_PRESET ?? "fast";
 
+// Encode backend: auto (default) detects the best usable encoder at boot,
+// preferring hardware (qsv → vaapi → nvenc → amf) and falling back to libx264.
+// Force a specific one with VIDEO_ENCODER=qsv|vaapi|nvenc|amf|libx264.
+export const VIDEO_ENCODER = process.env.VIDEO_ENCODER ?? "auto";
+
+// Cap libx264 worker threads (0 = let ffmpeg decide). Only affects the
+// software encoder; hardware encoders offload threading to the iGPU/GPU.
+export const VIDEO_FFMPEG_THREADS = parseInt(process.env.VIDEO_FFMPEG_THREADS ?? "0", 10) || 0;
+
+// Linux only: run ffmpeg with `nice -n 10` so watermarking never starves the
+// rest of the system and fans stay calm (slightly slower wall-clock).
+export const USE_NICE = process.platform === "linux" && process.env.VIDEO_NICE === "1";
+
+// sharp (image watermarking) thread pool cap. Lower = less CPU burst on image
+// folders; raise it on well-cooled machines for more throughput.
+export const SHARP_CONCURRENCY = parseInt(process.env.SHARP_CONCURRENCY ?? "4", 10) || 4;
+
 export const WATERMARK_MARGIN = 10; // px
 export const WATERMARK_HEIGHT_RATIO = 0.08; // 8% of the longest side
 export const WATERMARK_OPACITY = 0.5; // 50%

@@ -11,6 +11,7 @@ import { watchRoots } from "./core/watcher.ts";
 import { processHeavyFiles } from "./core/heavyProcessor.ts";
 import { runSetup, getUniqueRoots } from "./setup/index.ts";
 import { checkFfmpeg } from "./utils/validators.ts";
+import { getEncoderInfo } from "./utils/encoder.ts";
 import { killAllProcesses } from "./utils/processTracker.ts";
 import { cleanupAllTemps } from "./utils/tempTracker.ts";
 
@@ -82,6 +83,14 @@ async function main(): Promise<void> {
                 console.error("❌ ffmpeg not found. Please install ffmpeg.");
                 process.exit(1);
             }
+            const enc = getEncoderInfo();
+            if (enc.backend === "libx264") {
+                console.log(
+                    "🧠 Video encoding: software (libx264). Enable hardware via VIDEO_ENCODER."
+                );
+            } else {
+                console.log(`⚡ Video encoding: hardware (${enc.backend}).`);
+            }
         }
 
         const config = loadConfig();
@@ -103,6 +112,14 @@ async function main(): Promise<void> {
         if (!hasFfmpeg) {
             console.error("❌ ffmpeg not found. Please install ffmpeg.");
             process.exit(1);
+        }
+        const enc = getEncoderInfo();
+        if (enc.backend === "libx264") {
+            console.log(
+                "🧠 Video encoding: software (libx264). Enable hardware via VIDEO_ENCODER."
+            );
+        } else {
+            console.log(`⚡ Video encoding: hardware (${enc.backend}).`);
         }
     }
 
