@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DiscordAPIError, RateLimitError } from "@discordjs/rest";
 import type { GuildTextBasedChannel } from "discord.js";
 
-import { markAsSent, sendFile } from "./sender.ts";
+import { markAsSent, sendFile, hasBeenSent } from "./sender.ts";
 
 let tmpDir: string;
 let filePath: string;
@@ -46,6 +46,29 @@ describe("sendFile", () => {
         expect(channel.send).toHaveBeenCalledWith({
             files: [{ attachment: filePath, name: "clip.mp4" }],
         });
+    });
+
+    it("uses the attachmentName override while keeping the original dedup key", async () => {
+        const channel = mockChannel();
+        channel.send.mockResolvedValue({ id: "msg-1" });
+
+        // clip.3gp was transcoded to a real mp4: the attachment must carry the
+        // output extension so Discord renders it as a video.
+        const result = await sendFile(
+            asChannel(channel),
+            filePath,
+            "clip.3gp",
+            "111",
+            undefined,
+            "clip.mp4"
+        );
+
+        expect(result).toEqual({ success: true });
+        expect(channel.send).toHaveBeenCalledWith({
+            files: [{ attachment: filePath, name: "clip.mp4" }],
+        });
+        // The dedup registry still keys on the original file name.
+        expect(hasBeenSent("111:clip.3gp")).toBe(true);
     });
 
     it("does not send the same channel+file combination twice", async () => {

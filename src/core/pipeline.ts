@@ -149,7 +149,23 @@ export async function runPipeline(
                     continue;
                 }
 
-                const result = await sendFile(channel, finalPath, fileName, channelId);
+                // Discord detects inline media (video/image) by the attachment
+                // name's extension. When the file was transcoded the output may
+                // be a different container (e.g. .3gp → .mp4, .avif → .jpg), so
+                // the attachment must carry the OUTPUT extension — otherwise
+                // Discord shows a perfectly good mp4 as a plain file.
+                const attachmentName =
+                    finalPath !== filePath
+                        ? `${basename(fileName, extname(fileName))}${extname(finalPath)}`
+                        : fileName;
+                const result = await sendFile(
+                    channel,
+                    finalPath,
+                    fileName,
+                    channelId,
+                    undefined,
+                    attachmentName
+                );
 
                 if (finalPath !== filePath) {
                     deleteFile(finalPath, "Temp file");

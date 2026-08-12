@@ -72,7 +72,8 @@ export async function sendFile(
     filePath: string,
     fileName: string,
     channelId: string,
-    retries: number = MAX_SEND_RETRIES
+    retries: number = MAX_SEND_RETRIES,
+    attachmentName?: string
 ): Promise<SendResult> {
     const dedupKey = `${channelId}:${fileName}`;
 
@@ -95,7 +96,11 @@ export async function sendFile(
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
             const message = await channel.send({
-                files: [{ attachment: filePath, name: fileName }],
+                // attachmentName overrides the extension-only name used by
+                // Discord to detect inline media: a transcoded .3gp/.avif is
+                // uploaded as its real output extension (.mp4/.jpg) so Discord
+                // renders it as video/image instead of a plain file.
+                files: [{ attachment: filePath, name: attachmentName ?? fileName }],
             });
 
             console.log(`📤 Sent: ${fileName} → ${message.id}`);
