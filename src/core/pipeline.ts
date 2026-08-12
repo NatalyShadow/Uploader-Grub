@@ -13,6 +13,7 @@ import {
     deleteFile,
     moveFile,
     ensureDirectory,
+    getOutputExtension,
 } from "../utils/files.ts";
 import { getVideoDimensions, getVideoDuration } from "../utils/ffprobe.ts";
 import type { ConfigEntry } from "../types/index.ts";
@@ -61,7 +62,9 @@ export async function processFile(
     const ext = extname(fileName).toLowerCase();
     const base = basename(fileName, ext).replace(/\s+/g, "_");
 
-    const outputExt = isVideo(fileName) ? ".mp4" : isGif(fileName) ? ".gif" : ext || ".png";
+    // processFile is only ever called when watermarking (transcode), so the
+    // output extension always matches a real re-encode: videos → .mp4.
+    const outputExt = getOutputExtension(fileName, true);
 
     const outputPath = join(tmpDir, `wm_${randomUUID()}_${base}${outputExt}`);
 

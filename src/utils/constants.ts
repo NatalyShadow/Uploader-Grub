@@ -64,6 +64,7 @@ export const VIDEO_EXTS = [
     ".m4v",
     ".flv",
     ".wmv",
+    ".3gp",
 ] as const;
 export const GIF_EXT = ".gif";
 

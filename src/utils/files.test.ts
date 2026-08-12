@@ -14,6 +14,7 @@ import {
     replaceFile,
     ensureDirectory,
     generateUuidName,
+    getOutputExtension,
 } from "./files.ts";
 
 let tmpDir: string;
@@ -67,11 +68,49 @@ describe("isVideo", () => {
         ["clip.m4v", true],
         ["clip.flv", true],
         ["clip.wmv", true],
+        ["clip.3gp", true],
+        ["clip.3GP", true],
         ["clip.gif", false],
         ["clip.png", false],
         ["clip.txt", false],
     ])("detects %s as %s", (name, expected) => {
         expect(isVideo(name)).toBe(expected);
+    });
+});
+
+describe("getOutputExtension", () => {
+    it("transcodes videos to .mp4 when watermarking", () => {
+        expect(getOutputExtension("clip.webm", true)).toBe(".mp4");
+        expect(getOutputExtension("clip.mkv", true)).toBe(".mp4");
+        expect(getOutputExtension("clip.mov", true)).toBe(".mp4");
+        expect(getOutputExtension("clip.3gp", true)).toBe(".mp4");
+    });
+
+    it("keeps the original video extension when copying without watermark", () => {
+        expect(getOutputExtension("clip.webm", false)).toBe(".webm");
+        expect(getOutputExtension("clip.mkv", false)).toBe(".mkv");
+        expect(getOutputExtension("clip.mov", false)).toBe(".mov");
+        expect(getOutputExtension("clip.3gp", false)).toBe(".3gp");
+    });
+
+    it("is case-insensitive for video extensions", () => {
+        expect(getOutputExtension("clip.MP4", false)).toBe(".mp4");
+        expect(getOutputExtension("clip.3GP", false)).toBe(".3gp");
+    });
+
+    it("always keeps GIFs as .gif", () => {
+        expect(getOutputExtension("anim.gif", true)).toBe(".gif");
+        expect(getOutputExtension("anim.gif", false)).toBe(".gif");
+    });
+
+    it("keeps the image extension", () => {
+        expect(getOutputExtension("photo.png", true)).toBe(".png");
+        expect(getOutputExtension("photo.jpg", true)).toBe(".jpg");
+        expect(getOutputExtension("photo.webp", true)).toBe(".webp");
+    });
+
+    it("falls back to .png for extensionless files", () => {
+        expect(getOutputExtension("noext", true)).toBe(".png");
     });
 });
 

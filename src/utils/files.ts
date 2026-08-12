@@ -25,6 +25,24 @@ export function isVideo(fileName: string): boolean {
     return VIDEO_EXTS.includes(extname(fileName).toLowerCase() as (typeof VIDEO_EXTS)[number]);
 }
 
+/**
+ * Resolves the output extension for a processed file.
+ *
+ * - `transcode = true` (a real watermark/encode is running): videos are always
+ *   re-encoded to `.mp4` (the only container the pipeline produces), so the
+ *   output extension must be `.mp4`.
+ * - `transcode = false` (skip-watermark copy): the file is copied byte-for-byte
+ *   and keeps its original extension — renaming it (e.g. a `.webm` to `.mp4`)
+ *   would mislabel the container and make Discord reject it.
+ * - GIFs always stay `.gif`; images keep their extension.
+ */
+export function getOutputExtension(fileName: string, transcode: boolean): string {
+    const ext = extname(fileName).toLowerCase();
+    if (isVideo(fileName)) return transcode ? ".mp4" : ext;
+    if (isGif(fileName)) return ".gif";
+    return ext || ".png";
+}
+
 export function readDirectory(path: string): string[] {
     try {
         return readdirSync(path);

@@ -13,6 +13,7 @@ import {
     copyFile,
     ensureDirectory,
     replaceFile,
+    getOutputExtension,
 } from "../utils/files.ts";
 import { MAX_FILE_SIZE, SHOW_FILE_PROGRESS } from "../utils/constants.ts";
 import { registerTemp, unregisterTemp } from "../utils/tempTracker.ts";
@@ -66,12 +67,10 @@ export async function processHeavyFiles(
             }
 
             try {
-                const outputExt =
-                    processorType === "video"
-                        ? ".mp4"
-                        : processorType === "gif"
-                          ? ".gif"
-                          : extname(fileName).toLowerCase() || ".png";
+                // skipWatermark → byte-for-byte copy, keep the original extension;
+                // watermark → videos are re-encoded to .mp4 (and unsupported image
+                // formats normalized), which is what the extension must match.
+                const outputExt = getOutputExtension(fileName, !options.skipWatermark);
 
                 let processedTempPath: string;
 

@@ -38,6 +38,13 @@ describe("organizeFiles", () => {
         expect(readdirSync(join(tmpDir, "videos"))).toHaveLength(1);
     });
 
+    it("moves 3gp videos to videos/", () => {
+        touch("g.3gp");
+        const stats = organizeFiles(tmpDir);
+        expect(stats.moved).toBe(1);
+        expect(readdirSync(join(tmpDir, "videos"))).toHaveLength(1);
+    });
+
     it("moves GIFs to images/", () => {
         touch("c.gif");
         const stats = organizeFiles(tmpDir);
