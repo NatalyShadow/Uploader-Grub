@@ -11,10 +11,22 @@ import { extname, parse as parsePath, join as joinPath } from "path";
 import { randomUUID } from "crypto";
 import type { Stats } from "fs";
 
-import { IMAGE_EXTS, VIDEO_EXTS, GIF_EXT, UUID_PREFIX } from "./constants.ts";
+import {
+    IMAGE_EXTS,
+    UNSUPPORTED_IMAGE_EXTS,
+    VIDEO_EXTS,
+    GIF_EXT,
+    UUID_PREFIX,
+} from "./constants.ts";
 
 export function isImage(fileName: string): boolean {
     return IMAGE_EXTS.includes(extname(fileName).toLowerCase() as (typeof IMAGE_EXTS)[number]);
+}
+
+export function isUnsupportedImage(fileName: string): boolean {
+    return UNSUPPORTED_IMAGE_EXTS.includes(
+        extname(fileName).toLowerCase() as (typeof UNSUPPORTED_IMAGE_EXTS)[number]
+    );
 }
 
 export function isGif(fileName: string): boolean {
@@ -29,17 +41,20 @@ export function isVideo(fileName: string): boolean {
  * Resolves the output extension for a processed file.
  *
  * - `transcode = true` (a real watermark/encode is running): videos are always
- *   re-encoded to `.mp4` (the only container the pipeline produces), so the
- *   output extension must be `.mp4`.
+ *   re-encoded to `.mp4` (the only container the pipeline produces) and
+ *   unsupported image formats (`.avif`, `.bmp`, `.tiff`) are normalized to
+ *   `.jpg` (the extension sharp can always write), so the extension matches
+ *   what the processor actually produces.
  * - `transcode = false` (skip-watermark copy): the file is copied byte-for-byte
  *   and keeps its original extension — renaming it (e.g. a `.webm` to `.mp4`)
  *   would mislabel the container and make Discord reject it.
- * - GIFs always stay `.gif`; images keep their extension.
+ * - GIFs always stay `.gif`; supported images keep their extension.
  */
 export function getOutputExtension(fileName: string, transcode: boolean): string {
     const ext = extname(fileName).toLowerCase();
     if (isVideo(fileName)) return transcode ? ".mp4" : ext;
     if (isGif(fileName)) return ".gif";
+    if (isUnsupportedImage(fileName)) return transcode ? ".jpg" : ext;
     return ext || ".png";
 }
 

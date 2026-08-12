@@ -7,6 +7,7 @@ import {
     isImage,
     isGif,
     isVideo,
+    isUnsupportedImage,
     readDirectory,
     getFileStats,
     deleteFile,
@@ -109,8 +110,37 @@ describe("getOutputExtension", () => {
         expect(getOutputExtension("photo.webp", true)).toBe(".webp");
     });
 
+    it("normalizes unsupported image formats to .jpg when watermarking", () => {
+        expect(getOutputExtension("photo.avif", true)).toBe(".jpg");
+        expect(getOutputExtension("photo.bmp", true)).toBe(".jpg");
+        expect(getOutputExtension("photo.tiff", true)).toBe(".jpg");
+        expect(getOutputExtension("photo.TIFF", true)).toBe(".jpg");
+    });
+
+    it("keeps the original extension of unsupported images when copying without watermark", () => {
+        expect(getOutputExtension("photo.avif", false)).toBe(".avif");
+        expect(getOutputExtension("photo.bmp", false)).toBe(".bmp");
+        expect(getOutputExtension("photo.tiff", false)).toBe(".tiff");
+    });
+
     it("falls back to .png for extensionless files", () => {
         expect(getOutputExtension("noext", true)).toBe(".png");
+    });
+});
+
+describe("isUnsupportedImage", () => {
+    it.each([
+        ["photo.avif", true],
+        ["photo.bmp", true],
+        ["photo.tiff", true],
+        ["photo.TIFf", true],
+        ["photo.png", false],
+        ["photo.jpg", false],
+        ["photo.webp", false],
+        ["photo.gif", false],
+        ["photo.mp4", false],
+    ])("detects %s as %s", (name, expected) => {
+        expect(isUnsupportedImage(name)).toBe(expected);
     });
 });
 

@@ -55,6 +55,11 @@ export const VIDEO_FFMPEG_TIMEOUT_MS =
 export const FFPROBE_TIMEOUT_MS = 30_000;
 
 export const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".webp", ".avif", ".bmp", ".tiff"] as const;
+// Image formats the pipeline can READ (organizer accepts them) but whose
+// extension sharp cannot reliably WRITE when watermarking: BMP output is not
+// supported at all, and AVIF/TIFF output depends on the libvips build. When a
+// watermark is applied these are normalized to .jpg.
+export const UNSUPPORTED_IMAGE_EXTS = [".avif", ".bmp", ".tiff"] as const;
 export const VIDEO_EXTS = [
     ".mp4",
     ".mov",
