@@ -10,6 +10,7 @@ import {
     isImage,
     isGif,
     isVideo,
+    isForcedMp4Video,
     deleteFile,
     moveFile,
     ensureDirectory,
@@ -56,14 +57,16 @@ function moveToHeavy(filePath: string, configPath: string): boolean {
 export async function processFile(
     logoPath: string,
     filePath: string,
-    fileName: string
+    fileName: string,
+    watermark = true
 ): Promise<string> {
     const tmpDir = os.tmpdir();
     const ext = extname(fileName).toLowerCase();
     const base = basename(fileName, ext).replace(/\s+/g, "_");
 
-    // processFile is only ever called when watermarking (transcode), so the
-    // output extension always matches a real re-encode: videos → .mp4.
+    // processFile is only ever called when a real re-encode is needed
+    // (watermark, or a forced .3gp → .mp4 conversion in skip-watermark mode),
+    // so the output extension always matches the actual encode: videos → .mp4.
     const outputExt = getOutputExtension(fileName, true);
 
     const outputPath = join(tmpDir, `wm_${randomUUID()}_${base}${outputExt}`);
@@ -86,7 +89,14 @@ export async function processFile(
                 // Probe the duration once so the progress bar and the timeout
                 // scale with the real video length instead of fixed guesses.
                 const duration = await getVideoDuration(filePath);
-                await applyVideoWatermark(logoPath, filePath, outputPath, logoSize, duration);
+                await applyVideoWatermark(
+                    logoPath,
+                    filePath,
+                    outputPath,
+                    logoSize,
+                    duration,
+                    watermark
+                );
             }
             return outputPath;
         }
@@ -138,8 +148,17 @@ export async function runPipeline(
 
             try {
                 if (isImage(fileName) || isGif(fileName) || isVideo(fileName)) {
-                    if (!options.skipWatermark) {
-                        finalPath = await processFile(logoPath, filePath, fileName);
+                    // Even with --skip-watermark, forced-mp4 containers (.3gp)
+                    // must be converted (without the logo) because Discord
+                    // cannot play them inline at all.
+                    const needsConversion = isVideo(fileName) && isForcedMp4Video(fileName);
+                    if (!options.skipWatermark || needsConversion) {
+                        finalPath = await processFile(
+                            logoPath,
+                            filePath,
+                            fileName,
+                            !options.skipWatermark
+                        );
                     }
                 } else {
                     const parentDir = dirname(path);

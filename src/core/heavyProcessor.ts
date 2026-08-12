@@ -8,6 +8,7 @@ import {
     isImage,
     isGif,
     isVideo,
+    isForcedMp4Video,
     moveFile,
     deleteFile,
     copyFile,
@@ -67,14 +68,16 @@ export async function processHeavyFiles(
             }
 
             try {
-                // skipWatermark → byte-for-byte copy, keep the original extension;
-                // watermark → videos are re-encoded to .mp4 (and unsupported image
-                // formats normalized), which is what the extension must match.
+                // skipWatermark → byte-for-byte copy, keep the original
+                // extension (except forced-mp4 containers like .3gp, which are
+                // converted without a logo because Discord cannot play them);
+                // watermark → videos are re-encoded to .mp4 (and unsupported
+                // image formats normalized), which the extension must match.
                 const outputExt = getOutputExtension(fileName, !options.skipWatermark);
 
                 let processedTempPath: string;
 
-                if (options.skipWatermark) {
+                if (options.skipWatermark && !isForcedMp4Video(fileName)) {
                     // Copy to temp without processing. The temp name derives from
                     // the original file name (which already carries the organizer
                     // UUID), so the promoted file keeps its name. Registered with
@@ -94,8 +97,15 @@ export async function processHeavyFiles(
                     // CRF + lossless-audio encode as the normal pipeline). No
                     // size target — if the result already fits the upload limit
                     // the size gate below promotes it, otherwise it stays
-                    // watermarked in heavy/ for manual upload.
-                    processedTempPath = await processFile(logoPath, filePath, fileName);
+                    // watermarked in heavy/ for manual upload. In skip-watermark
+                    // mode this branch only runs for forced-mp4 containers
+                    // (.3gp), which are converted WITHOUT the logo.
+                    processedTempPath = await processFile(
+                        logoPath,
+                        filePath,
+                        fileName,
+                        !options.skipWatermark
+                    );
                 }
 
                 // Size gate: promote files that now fit the upload limit.

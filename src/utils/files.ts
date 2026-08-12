@@ -15,6 +15,7 @@ import {
     IMAGE_EXTS,
     UNSUPPORTED_IMAGE_EXTS,
     VIDEO_EXTS,
+    FORCE_MP4_VIDEO_EXTS,
     GIF_EXT,
     UUID_PREFIX,
 } from "./constants.ts";
@@ -38,6 +39,18 @@ export function isVideo(fileName: string): boolean {
 }
 
 /**
+ * True for video containers Discord cannot render inline (e.g. `.3gp`). These
+ * must always be converted to `.mp4`, even when watermarking is skipped —
+ * renaming alone would mislabel the container and Discord would still show the
+ * file as a plain download.
+ */
+export function isForcedMp4Video(fileName: string): boolean {
+    return FORCE_MP4_VIDEO_EXTS.includes(
+        extname(fileName).toLowerCase() as (typeof FORCE_MP4_VIDEO_EXTS)[number]
+    );
+}
+
+/**
  * Resolves the output extension for a processed file.
  *
  * - `transcode = true` (a real watermark/encode is running): videos are always
@@ -47,12 +60,14 @@ export function isVideo(fileName: string): boolean {
  *   what the processor actually produces.
  * - `transcode = false` (skip-watermark copy): the file is copied byte-for-byte
  *   and keeps its original extension — renaming it (e.g. a `.webm` to `.mp4`)
- *   would mislabel the container and make Discord reject it.
+ *   would mislabel the container and make Discord reject it. EXCEPT for
+ *   forced-mp4 containers (`.3gp`): Discord cannot play them inline at all, so
+ *   even a skip-watermark copy must be converted and carry `.mp4`.
  * - GIFs always stay `.gif`; supported images keep their extension.
  */
 export function getOutputExtension(fileName: string, transcode: boolean): string {
     const ext = extname(fileName).toLowerCase();
-    if (isVideo(fileName)) return transcode ? ".mp4" : ext;
+    if (isVideo(fileName)) return transcode || isForcedMp4Video(fileName) ? ".mp4" : ext;
     if (isGif(fileName)) return ".gif";
     if (isUnsupportedImage(fileName)) return transcode ? ".jpg" : ext;
     return ext || ".png";

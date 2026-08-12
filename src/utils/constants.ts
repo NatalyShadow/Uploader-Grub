@@ -71,6 +71,10 @@ export const VIDEO_EXTS = [
     ".wmv",
     ".3gp",
 ] as const;
+// Video containers Discord cannot render inline (no in-chat player). These
+// MUST be converted to .mp4 before sending, even when watermarking is skipped,
+// or Discord would show them as plain downloadable files.
+export const FORCE_MP4_VIDEO_EXTS = [".3gp"] as const;
 export const GIF_EXT = ".gif";
 
 export const UUID_PREFIX = process.env.MEDIA_NAME_PREFIX ?? "";

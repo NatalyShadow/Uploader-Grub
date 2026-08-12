@@ -12,7 +12,12 @@ import { getEncoderInfo, softwareEncoder, type EncoderInfo } from "../utils/enco
 import { runCommand, TimeoutError } from "../utils/process.ts";
 import { createProgressTracker } from "../utils/progress.ts";
 
-function buildFilterComplex(logoSize: number): string {
+function buildFilterComplex(logoSize: number, watermark: boolean): string {
+    if (!watermark) {
+        // No-logo conversion (e.g. forced .3gp → .mp4): just scale to even
+        // dimensions for the encoder, no second input, no overlay.
+        return `[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[v]`;
+    }
     return (
         `[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[base];` +
         `[1:v]scale=${logoSize}:${logoSize}:force_original_aspect_ratio=decrease[logo];` +
@@ -33,7 +38,8 @@ function buildEncodeArgs(
     outputPath: string,
     filterComplex: string,
     audio: "copy" | "aac",
-    enc: EncoderInfo
+    enc: EncoderInfo,
+    watermark: boolean
 ): string[] {
     const args = [
         "-y",
@@ -46,16 +52,22 @@ function buildEncodeArgs(
         ...enc.initArgs,
         "-i",
         inputPath,
-        "-i",
-        logoPath,
+    ];
+
+    // Only the watermark path consumes the logo as a second input.
+    if (watermark) {
+        args.push("-i", logoPath);
+    }
+
+    args.push(
         "-filter_complex",
         filterComplex + enc.filterTail,
         "-map",
         `[${enc.outLabel}]`,
         "-map",
         "0:a:0?",
-        ...enc.encoderArgs(VIDEO_CRF, VIDEO_PRESET),
-    ];
+        ...enc.encoderArgs(VIDEO_CRF, VIDEO_PRESET)
+    );
 
     if (audio === "copy") {
         args.push("-c:a", "copy"); // preserve original audio → zero loss
@@ -112,8 +124,14 @@ async function runFfmpeg(
 }
 
 /**
- * Quality-first watermark (single standard, used by the normal pipeline and the
- * heavy processor): CRF near-lossless + copied audio. Uses the auto-detected
+ * Re-encodes a video to H.264/AAC `.mp4`, optionally overlaying the logo.
+ *
+ * Used for two jobs:
+ * - watermarking (the normal pipeline and the heavy processor);
+ * - forced conversion to `.mp4` without a logo (e.g. `.3gp` when watermarking
+ *   is skipped — Discord cannot render `.3gp` inline at all).
+ *
+ * Quality-first (CRF near-lossless + copied audio), uses the auto-detected
  * hardware encoder when available (iGPU/GPU, far cooler and faster); falls back
  * to software libx264 if the hardware attempt fails (unsupported input/audio).
  * Falls back to re-encoding audio (AAC) if the original audio track can't be
@@ -125,19 +143,29 @@ export async function applyVideoWatermark(
     inputPath: string,
     outputPath: string,
     logoSize: number,
-    duration: number
+    duration: number,
+    watermark = true
 ): Promise<void> {
     const label = basename(inputPath);
-    const filterComplex = buildFilterComplex(logoSize);
+    const filterComplex = buildFilterComplex(logoSize, watermark);
     const enc = await getEncoderInfo();
 
+    const mode = watermark ? "watermarking" : "converting";
     console.log(
-        `🎬 ${label}: watermarking (encoder=${enc.backend}, crf=${VIDEO_CRF}, preset=${VIDEO_PRESET})...`
+        `🎬 ${label}: ${mode} (encoder=${enc.backend}, crf=${VIDEO_CRF}, preset=${VIDEO_PRESET})...`
     );
 
     const attempt = (audio: "copy" | "aac", encoder: EncoderInfo): Promise<void> =>
         runFfmpeg(
-            buildEncodeArgs(inputPath, logoPath, outputPath, filterComplex, audio, encoder),
+            buildEncodeArgs(
+                inputPath,
+                logoPath,
+                outputPath,
+                filterComplex,
+                audio,
+                encoder,
+                watermark
+            ),
             label,
             duration,
             createProgressTracker(label, duration)

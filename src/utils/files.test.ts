@@ -8,6 +8,7 @@ import {
     isGif,
     isVideo,
     isUnsupportedImage,
+    isForcedMp4Video,
     readDirectory,
     getFileStats,
     deleteFile,
@@ -91,12 +92,15 @@ describe("getOutputExtension", () => {
         expect(getOutputExtension("clip.webm", false)).toBe(".webm");
         expect(getOutputExtension("clip.mkv", false)).toBe(".mkv");
         expect(getOutputExtension("clip.mov", false)).toBe(".mov");
-        expect(getOutputExtension("clip.3gp", false)).toBe(".3gp");
+    });
+
+    it("forces .3gp to .mp4 even when copying without watermark", () => {
+        expect(getOutputExtension("clip.3gp", false)).toBe(".mp4");
     });
 
     it("is case-insensitive for video extensions", () => {
         expect(getOutputExtension("clip.MP4", false)).toBe(".mp4");
-        expect(getOutputExtension("clip.3GP", false)).toBe(".3gp");
+        expect(getOutputExtension("clip.3GP", false)).toBe(".mp4");
     });
 
     it("always keeps GIFs as .gif", () => {
@@ -141,6 +145,20 @@ describe("isUnsupportedImage", () => {
         ["photo.mp4", false],
     ])("detects %s as %s", (name, expected) => {
         expect(isUnsupportedImage(name)).toBe(expected);
+    });
+});
+
+describe("isForcedMp4Video", () => {
+    it.each([
+        ["clip.3gp", true],
+        ["clip.3GP", true],
+        ["clip.mp4", false],
+        ["clip.webm", false],
+        ["clip.mkv", false],
+        ["clip.gif", false],
+        ["photo.png", false],
+    ])("detects %s as %s", (name, expected) => {
+        expect(isForcedMp4Video(name)).toBe(expected);
     });
 });
 

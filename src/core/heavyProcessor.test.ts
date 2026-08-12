@@ -89,13 +89,23 @@ describe("processHeavyFiles", () => {
             expect(vi.mocked(processFile)).not.toHaveBeenCalled();
         });
 
-        it("keeps the .3gp extension when copying without a watermark", async () => {
+        it("converts 3gp to mp4 even without a watermark", async () => {
             putHeavyFile("clip.3gp");
+            stubProcessFile(100);
 
             await processHeavyFiles(configForRoot(), "/logo.webp", { skipWatermark: true });
 
-            expect(existsSync(join(root, "videos", "clip.3gp"))).toBe(true);
-            expect(readdirSync(join(root, "videos"))).toEqual(["clip.3gp"]);
+            // Discord cannot play .3gp inline, so skip-watermark copies are
+            // still converted (without the logo) and promoted as .mp4.
+            expect(vi.mocked(processFile)).toHaveBeenCalledTimes(1);
+            expect(vi.mocked(processFile)).toHaveBeenCalledWith(
+                "/logo.webp",
+                join(heavyDir, "clip.3gp"),
+                "clip.3gp",
+                false
+            );
+            expect(existsSync(join(heavyDir, "clip.3gp"))).toBe(false);
+            expect(existsSync(join(root, "videos", "clip.mp4"))).toBe(true);
         });
 
         it("keeps the original extension of unsupported images", async () => {
