@@ -200,4 +200,31 @@ describe("processHeavyFiles with a small size limit", () => {
         expect(existsSync(join(root, "videos", "clip.mp4"))).toBe(false);
         expect(existsSync(join(heavyDir, "clip.mp4"))).toBe(true);
     });
+
+    it("keeps oversized 3gp files converted as .mp4, never as .3gp", async () => {
+        vi.stubEnv("MAX_FILE_SIZE_MB", "0.001");
+        vi.resetModules();
+        const fresh = await import("./heavyProcessor.ts");
+        const freshPipeline = await import("./pipeline.ts");
+        const freshProcessFile = vi.mocked(freshPipeline.processFile);
+
+        putHeavyFile("clip.3gp");
+        freshProcessFile.mockImplementation(
+            (_logoPath: string, _filePath: string, _fileName: string): Promise<string> => {
+                const tempPath = join(tmpdir(), `grub-wm-${randomUUID()}.mp4`);
+                writeFileSync(tempPath, Buffer.alloc(2000, 1));
+                mockTemps.push(tempPath);
+                return Promise.resolve(tempPath);
+            }
+        );
+
+        await fresh.processHeavyFiles(configForRoot(), "/logo.webp", { skipWatermark: false });
+
+        // Oversized: never promoted to videos/, but the conversion ran anyway
+        // and the processed copy replaces the .3gp under the .mp4 name — the
+        // file must never be left behind as a .3gp container.
+        expect(existsSync(join(root, "videos", "clip.mp4"))).toBe(false);
+        expect(existsSync(join(heavyDir, "clip.mp4"))).toBe(true);
+        expect(existsSync(join(heavyDir, "clip.3gp"))).toBe(false);
+    });
 });

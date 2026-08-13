@@ -110,19 +110,28 @@ export async function processHeavyFiles(
 
                 // Size gate: promote files that now fit the upload limit.
                 // Files that remain oversized are kept in heavy/ but REPLACED by
-                // the watermarked copy, so no heavy/ file is ever left unmarked.
+                // the processed copy, so no heavy/ file is ever left unmarked.
+                // The replacement carries the OUTPUT extension: a converted
+                // .3gp is stored as .mp4 even when oversized, because the
+                // conversion must happen regardless of size — otherwise the
+                // file would stay stuck as a container Discord can never play.
                 const processedStats = getFileStats(processedTempPath);
                 if (!processedStats || processedStats.size > MAX_FILE_SIZE) {
                     const sizeMB = ((processedStats?.size ?? 0) / (1024 * 1024)).toFixed(1);
-                    const replaced = replaceFile(processedTempPath, filePath);
+                    const base = basename(fileName, extname(fileName));
+                    const replacedTarget = join(heavyDir, `${base}${outputExt}`);
+                    const replaced = replaceFile(processedTempPath, replacedTarget);
+                    if (replaced && replacedTarget !== filePath) {
+                        deleteFile(filePath, `Original heavy: ${fileName}`);
+                    }
                     unregisterTemp(processedTempPath);
                     if (replaced) {
                         console.warn(
-                            `💡 ${fileName} still exceeds 10MB (${sizeMB}MB), kept watermarked in heavy/`
+                            `💡 ${fileName} still exceeds 10MB (${sizeMB}MB), kept processed in heavy/ as ${base}${outputExt}`
                         );
                     } else {
                         console.error(
-                            `⚠️ Could not keep watermarked copy, temp cleaned; original stays`
+                            `⚠️ Could not keep processed copy, temp cleaned; original stays`
                         );
                         deleteFile(processedTempPath, "Temp file");
                     }
