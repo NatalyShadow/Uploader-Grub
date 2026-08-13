@@ -2,8 +2,8 @@ import { basename } from "path";
 import {
     WATERMARK_MARGIN,
     WATERMARK_OPACITY,
-    GIF_FFMPEG_TIMEOUT_MS,
     USE_NICE,
+    gifFfmpegTimeoutMs,
 } from "../utils/constants.ts";
 import { runCommand } from "../utils/process.ts";
 
@@ -11,7 +11,8 @@ export function applyGifWatermark(
     logoPath: string,
     inputPath: string,
     outputPath: string,
-    logoSize: number
+    logoSize: number,
+    duration: number
 ): Promise<void> {
     const label = basename(inputPath);
 
@@ -42,7 +43,7 @@ export function applyGifWatermark(
         command: "ffmpeg",
         args,
         nice: USE_NICE ? 10 : undefined,
-        timeoutMs: GIF_FFMPEG_TIMEOUT_MS,
+        timeoutMs: gifFfmpegTimeoutMs(duration),
         label: `GIF ${label}`,
         maxStderrChars: 4096,
     }).then(() => {

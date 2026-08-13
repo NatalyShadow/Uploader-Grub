@@ -83,12 +83,13 @@ export async function processFile(
             const dims = await getVideoDimensions(filePath);
             const logoSize = calculateLogoSize(dims.width, dims.height);
 
+            // Probe the duration once so the progress bar and the timeout
+            // scale with the real GIF/video length instead of fixed guesses.
+            const duration = await getVideoDuration(filePath);
+
             if (isGif(fileName)) {
-                await applyGifWatermark(logoPath, filePath, outputPath, logoSize);
+                await applyGifWatermark(logoPath, filePath, outputPath, logoSize, duration);
             } else {
-                // Probe the duration once so the progress bar and the timeout
-                // scale with the real video length instead of fixed guesses.
-                const duration = await getVideoDuration(filePath);
                 await applyVideoWatermark(
                     logoPath,
                     filePath,

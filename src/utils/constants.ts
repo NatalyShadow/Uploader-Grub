@@ -50,6 +50,26 @@ export const MAX_RETRY_AFTER_MS = 30_000; // ceiling for backoff between send re
 export const SEND_REASON_TOO_LARGE = "too_large";
 
 export const GIF_FFMPEG_TIMEOUT_MS = 60_000;
+// Hard cap for ffmpeg encode timeouts, shared by videos and GIFs (6h): a stuck
+// encode must always abort eventually, but a long legitimate render (e.g. a
+// giant heavy/ GIF) is never killed mid-work.
+const MAX_FFMPEG_TIMEOUT_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Scaled ffmpeg timeout for GIF watermarking.
+ *
+ * GIFs are re-encoded frame-by-frame through palettegen/paletteuse, which is
+ * far slower per second of content than H.264 video encoding — a fixed 60s
+ * timeout would kill large heavy/ GIFs mid-render even though they complete
+ * fine. Like the video timeout, scale with the GIF duration: at least the
+ * fixed base, ~3s of budget per second of GIF, plus a 60s headroom, capped at
+ * MAX_FFMPEG_TIMEOUT_MS. Baked in — no env knob by design.
+ */
+export function gifFfmpegTimeoutMs(durationSeconds: number): number {
+    const safeDuration = Number.isFinite(durationSeconds) ? Math.max(0, durationSeconds) : 0;
+    const scaled = safeDuration * 1000 * 3 + 60_000;
+    return Math.max(GIF_FFMPEG_TIMEOUT_MS, Math.min(scaled, MAX_FFMPEG_TIMEOUT_MS));
+}
 export const VIDEO_FFMPEG_TIMEOUT_MS =
     parseInt(process.env.VIDEO_FFMPEG_TIMEOUT_MS ?? "120000", 10) || 120_000;
 export const FFPROBE_TIMEOUT_MS = 30_000;
