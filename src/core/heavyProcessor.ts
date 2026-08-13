@@ -1,5 +1,6 @@
 import os from "os";
 import { join, extname, basename } from "path";
+import { randomUUID } from "crypto";
 import type { ConfigEntry } from "../types/index.ts";
 
 import {
@@ -85,7 +86,11 @@ export async function processHeavyFiles(
                     // tempTracker so an interrupted run cleans up on shutdown.
                     const base = basename(fileName, extname(fileName));
                     const tmpDir = os.tmpdir();
-                    const tempName = `heavy_${base}${outputExt}`;
+                    // UUID in the temp name so copies from different roots (or
+                    // stale temps from an interrupted run) never collide —
+                    // processFile uses the same pattern. The promoted name is
+                    // derived from the original fileName, never from this path.
+                    const tempName = `heavy_${randomUUID()}_${base}${outputExt}`;
                     processedTempPath = join(tmpDir, tempName);
                     registerTemp(processedTempPath);
                     if (!copyFile(filePath, processedTempPath)) {
