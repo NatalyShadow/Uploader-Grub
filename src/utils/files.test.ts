@@ -9,6 +9,7 @@ import {
     isVideo,
     isUnsupportedImage,
     isForcedMp4Video,
+    hasForcedMp4Files,
     readDirectory,
     getFileStats,
     deleteFile,
@@ -159,6 +160,56 @@ describe("isForcedMp4Video", () => {
         ["photo.png", false],
     ])("detects %s as %s", (name, expected) => {
         expect(isForcedMp4Video(name)).toBe(expected);
+    });
+});
+
+describe("hasForcedMp4Files", () => {
+    const dir = () => join(tmpDir, "media");
+
+    it("returns false for a missing directory", () => {
+        expect(hasForcedMp4Files([dir()])).toBe(false);
+    });
+
+    it("returns false for an empty directory", () => {
+        ensureDirectory(dir());
+        expect(hasForcedMp4Files([dir()])).toBe(false);
+    });
+
+    it("returns false when only non-forced media is present", () => {
+        ensureDirectory(dir());
+        writeFileSync(join(dir(), "clip.mp4"), "");
+        writeFileSync(join(dir(), "clip.webm"), "");
+        writeFileSync(join(dir(), "photo.png"), "");
+        expect(hasForcedMp4Files([dir()])).toBe(false);
+    });
+
+    it("returns true when a .3gp file is present", () => {
+        ensureDirectory(dir());
+        writeFileSync(join(dir(), "clip.3gp"), "");
+        expect(hasForcedMp4Files([dir()])).toBe(true);
+    });
+
+    it("detects .3gp case-insensitively", () => {
+        ensureDirectory(dir());
+        writeFileSync(join(dir(), "clip.3GP"), "");
+        expect(hasForcedMp4Files([dir()])).toBe(true);
+    });
+
+    it("scans multiple directories", () => {
+        ensureDirectory(dir());
+        writeFileSync(join(dir(), "clip.mp4"), "");
+        const other = join(tmpDir, "other");
+        ensureDirectory(other);
+        writeFileSync(join(other, "clip.3gp"), "");
+        expect(hasForcedMp4Files([dir(), other])).toBe(true);
+    });
+
+    it("ignores subfolders such as _failed/", () => {
+        ensureDirectory(dir());
+        const failed = join(dir(), "_failed");
+        ensureDirectory(failed);
+        writeFileSync(join(failed, "broken.3gp"), "");
+        expect(hasForcedMp4Files([dir()])).toBe(false);
     });
 });
 

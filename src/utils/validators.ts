@@ -24,3 +24,18 @@ export async function checkFfmpeg(): Promise<boolean> {
     const hasFfprobe = await checkCommand("ffprobe");
     return hasFfprobe;
 }
+
+// Cached availability check, so a running watch-mode session never re-probes
+// ffmpeg/ffprobe for every .3gp that arrives. Mirrors getEncoderInfo()'s
+// module-level promise caching.
+let ffmpegCheckPromise: Promise<boolean> | null = null;
+
+/**
+ * Returns true if both ffmpeg and ffprobe are available. Cached for the whole
+ * process; lazy fallback for forced-mp4 (.3gp) conversions in skip-watermark
+ * mode, where the startup check is skipped unless a .3gp is already present.
+ */
+export function ensureFfmpeg(): Promise<boolean> {
+    ffmpegCheckPromise ??= checkFfmpeg();
+    return ffmpegCheckPromise;
+}

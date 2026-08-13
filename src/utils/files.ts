@@ -51,6 +51,22 @@ export function isForcedMp4Video(fileName: string): boolean {
 }
 
 /**
+ * True if any regular file in the given directories is a forced-mp4 container
+ * (`.3gp`). Used at startup to decide whether ffmpeg/ffprobe must be present
+ * even with `--skip-watermark`, since forced conversions always re-encode.
+ * Subfolders (e.g. the auto-generated `_failed/` quarantine) are ignored.
+ */
+export function hasForcedMp4Files(paths: string[]): boolean {
+    for (const dir of paths) {
+        for (const fileName of readDirectory(dir)) {
+            if (!getFileStats(joinPath(dir, fileName))?.isFile()) continue;
+            if (isForcedMp4Video(fileName)) return true;
+        }
+    }
+    return false;
+}
+
+/**
  * Resolves the output extension for a processed file.
  *
  * - `transcode = true` (a real watermark/encode is running): videos are always

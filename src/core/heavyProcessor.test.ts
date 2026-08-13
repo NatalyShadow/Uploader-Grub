@@ -6,10 +6,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { processHeavyFiles } from "./heavyProcessor.ts";
 import { processFile } from "./pipeline.ts";
+import { ensureFfmpeg } from "../utils/validators.ts";
 import type { ConfigEntry } from "../types/index.ts";
 
 vi.mock("./pipeline.ts", () => ({
     processFile: vi.fn(),
+}));
+
+// ensureFfmpeg defaults to available; individual tests flip it to simulate
+// a host without ffmpeg.
+vi.mock("../utils/validators.ts", () => ({
+    ensureFfmpeg: vi.fn(),
 }));
 
 let root: string;
@@ -21,6 +28,8 @@ beforeEach(() => {
     heavyDir = join(root, "heavy");
     mkdirSync(heavyDir, { recursive: true });
     vi.mocked(processFile).mockReset();
+    vi.mocked(ensureFfmpeg).mockReset();
+    vi.mocked(ensureFfmpeg).mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -106,6 +115,20 @@ describe("processHeavyFiles", () => {
             );
             expect(existsSync(join(heavyDir, "clip.3gp"))).toBe(false);
             expect(existsSync(join(root, "videos", "clip.mp4"))).toBe(true);
+        });
+
+        it("skips 3gp conversion when ffmpeg is missing, keeping the file in heavy/", async () => {
+            putHeavyFile("clip.3gp");
+            vi.mocked(ensureFfmpeg).mockResolvedValue(false);
+
+            await processHeavyFiles(configForRoot(), "/logo.webp", { skipWatermark: true });
+
+            // Without ffmpeg/ffprobe the forced conversion cannot run; the
+            // file stays in heavy/ (NOT quarantined) so a later rerun with
+            // ffmpeg installed can still process it.
+            expect(vi.mocked(processFile)).not.toHaveBeenCalled();
+            expect(existsSync(join(heavyDir, "clip.3gp"))).toBe(true);
+            expect(existsSync(join(root, "videos", "clip.mp4"))).toBe(false);
         });
 
         it("keeps the original extension of unsupported images", async () => {

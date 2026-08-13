@@ -20,6 +20,7 @@ import { MAX_FILE_SIZE, SHOW_FILE_PROGRESS } from "../utils/constants.ts";
 import { registerTemp, unregisterTemp } from "../utils/tempTracker.ts";
 import { processFile } from "./pipeline.ts";
 import { getUniqueRoots } from "../setup/index.ts";
+import { ensureFfmpeg } from "../utils/validators.ts";
 
 export interface HeavyProcessorOptions {
     skipWatermark: boolean;
@@ -100,6 +101,12 @@ export async function processHeavyFiles(
                     // watermarked in heavy/ for manual upload. In skip-watermark
                     // mode this branch only runs for forced-mp4 containers
                     // (.3gp), which are converted WITHOUT the logo.
+                    if (options.skipWatermark && !(await ensureFfmpeg())) {
+                        console.error(
+                            `⚠️ ${fileName}: .3gp conversion requires ffmpeg/ffprobe, keeping in heavy/`
+                        );
+                        continue;
+                    }
                     processedTempPath = await processFile(
                         logoPath,
                         filePath,

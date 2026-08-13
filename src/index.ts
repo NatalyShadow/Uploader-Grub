@@ -11,6 +11,7 @@ import { watchRoots } from "./core/watcher.ts";
 import { processHeavyFiles } from "./core/heavyProcessor.ts";
 import { runSetup, getUniqueRoots } from "./setup/index.ts";
 import { checkFfmpeg } from "./utils/validators.ts";
+import { hasForcedMp4Files } from "./utils/files.ts";
 import { getEncoderInfo } from "./utils/encoder.ts";
 import { killAllProcesses } from "./utils/processTracker.ts";
 import { cleanupAllTemps } from "./utils/tempTracker.ts";
@@ -82,22 +83,32 @@ async function main(): Promise<void> {
 
     if (processHeavy) {
         // Heavy processing mode: no Discord, no watch, just process heavy/ → processed/
+        const config = loadConfig();
+        runSetup(config);
+
         if (!options.skipWatermark && !existsSync(logoPath)) {
             console.error(`❌ Logo not found: ${logoPath}`);
             process.exit(1);
         }
 
-        if (!options.skipWatermark) {
+        // Forced-mp4 containers (.3gp) in heavy/ are always converted, even
+        // with --skip-watermark, so ffmpeg/ffprobe are mandatory if any exist.
+        const roots = getUniqueRoots(config);
+        const needsFfmpeg =
+            !options.skipWatermark || hasForcedMp4Files(roots.map((root) => join(root, "heavy")));
+
+        if (needsFfmpeg) {
             const hasFfmpeg = await checkFfmpeg();
             if (!hasFfmpeg) {
-                console.error("❌ ffmpeg not found. Please install ffmpeg.");
+                console.error(
+                    options.skipWatermark
+                        ? "❌ ffmpeg not found. .3gp files in heavy/ must be converted even with --skip-watermark."
+                        : "❌ ffmpeg not found. Please install ffmpeg."
+                );
                 process.exit(1);
             }
             await logVideoEncoder();
         }
-
-        const config = loadConfig();
-        runSetup(config);
 
         await processHeavyFiles(config, logoPath, { skipWatermark: options.skipWatermark });
         cleanupAllTemps();
@@ -105,22 +116,32 @@ async function main(): Promise<void> {
     }
 
     // Normal bot mode
+    const config = loadConfig();
+    runSetup(config);
+
     if (!options.skipWatermark && !existsSync(logoPath)) {
         console.error(`❌ Logo not found: ${logoPath}`);
         process.exit(1);
     }
 
-    if (!options.skipWatermark) {
+    // With --skip-watermark, ffmpeg is only required when a forced-mp4
+    // container (.3gp) is present — those are converted without a logo. With
+    // watermarking enabled it is always required.
+    const needsFfmpeg =
+        !options.skipWatermark || hasForcedMp4Files(config.map((entry) => entry.path));
+
+    if (needsFfmpeg) {
         const hasFfmpeg = await checkFfmpeg();
         if (!hasFfmpeg) {
-            console.error("❌ ffmpeg not found. Please install ffmpeg.");
+            console.error(
+                options.skipWatermark
+                    ? "❌ ffmpeg not found. .3gp files must be converted even with --skip-watermark."
+                    : "❌ ffmpeg not found. Please install ffmpeg."
+            );
             process.exit(1);
         }
         await logVideoEncoder();
     }
-
-    const config = loadConfig();
-    runSetup(config);
 
     client = initClient();
 

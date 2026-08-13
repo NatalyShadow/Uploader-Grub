@@ -26,6 +26,7 @@ import { applyGifWatermark } from "./gifProcessor.ts";
 import { sendFile } from "./sender.ts";
 import { registerTemp, unregisterTemp } from "../utils/tempTracker.ts";
 import { calculateLogoSize } from "../utils/watermark.ts";
+import { ensureFfmpeg } from "../utils/validators.ts";
 
 export interface PipelineOptions {
     skipWatermark: boolean;
@@ -153,6 +154,20 @@ export async function runPipeline(
                     // must be converted (without the logo) because Discord
                     // cannot play them inline at all.
                     const needsConversion = isVideo(fileName) && isForcedMp4Video(fileName);
+
+                    // Lazy fallback for skip-watermark mode: a .3gp may arrive
+                    // after the startup check (e.g. in watch mode) when no
+                    // forced file was present at boot. Conversion always needs
+                    // ffmpeg/ffprobe, so check once (cached) and skip the file
+                    // WITHOUT quarantining it — it stays in place and is
+                    // retried once ffmpeg exists.
+                    if (options.skipWatermark && needsConversion && !(await ensureFfmpeg())) {
+                        console.error(
+                            `⚠️ ${fileName}: .3gp conversion requires ffmpeg/ffprobe, skipping`
+                        );
+                        continue;
+                    }
+
                     if (!options.skipWatermark || needsConversion) {
                         finalPath = await processFile(
                             logoPath,
