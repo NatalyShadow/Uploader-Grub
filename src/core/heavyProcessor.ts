@@ -1,6 +1,7 @@
 import os from "os";
 import { join, extname, basename } from "path";
 import { randomUUID } from "crypto";
+import { existsSync } from "fs";
 import type { ConfigEntry } from "../types/index.ts";
 
 import {
@@ -131,7 +132,15 @@ export async function processHeavyFiles(
                 if (!processedStats || processedStats.size > MAX_FILE_SIZE) {
                     const sizeMB = ((processedStats?.size ?? 0) / (1024 * 1024)).toFixed(1);
                     const base = basename(fileName, extname(fileName));
-                    const replacedTarget = join(heavyDir, `${base}${outputExt}`);
+                    let replacedTarget = join(heavyDir, `${base}${outputExt}`);
+                    // Never clobber an unrelated file: if the output name
+                    // already exists AND is not the file we are re-processing
+                    // in place (e.g. another source sharing the same base, or
+                    // a previous run's copy), keep both by using a timestamped
+                    // name instead of overwriting it silently.
+                    if (existsSync(replacedTarget) && replacedTarget !== filePath) {
+                        replacedTarget = join(heavyDir, `${base}_${Date.now()}${outputExt}`);
+                    }
                     const replaced = replaceFile(processedTempPath, replacedTarget);
                     if (replaced && replacedTarget !== filePath) {
                         deleteFile(filePath, `Original heavy: ${fileName}`);
@@ -139,7 +148,7 @@ export async function processHeavyFiles(
                     unregisterTemp(processedTempPath);
                     if (replaced) {
                         console.warn(
-                            `💡 ${fileName} still exceeds 10MB (${sizeMB}MB), kept processed in heavy/ as ${base}${outputExt}`
+                            `💡 ${fileName} still exceeds 10MB (${sizeMB}MB), kept processed in heavy/ as ${basename(replacedTarget)}`
                         );
                     } else {
                         console.error(
