@@ -7,25 +7,16 @@
         "start": "node dist/index.js",
         "build": "rm -rf dist && tsc -p tsconfig.build.json && cp src/logo.webp dist/logo.webp",
         "dev": "tsx watch src/index.ts",
-        "lint": "eslint src/",
-        "lint:fix": "eslint src/ --fix",
-        "format": "prettier --write --ignore-unknown .",
-        "format:check": "prettier --check --ignore-unknown .",
+        "lint": "biome check .",
+        "lint:fix": "biome check --write .",
+        "format": "biome format --write .",
+        "format:check": "biome format .",
         "test": "vitest run",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
         "typecheck": "tsc --noEmit",
         "verify": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build",
         "prepare": "husky"
-    },
-    "lint-staged": {
-        "src/**/*.ts": [
-            "prettier --write",
-            "eslint --fix"
-        ],
-        "*.{json,md}": [
-            "prettier --write"
-        ]
     },
     "keywords": [],
     "author": "",
@@ -39,17 +30,12 @@
         "sharp": "^0.34.5"
     },
     "devDependencies": {
-        "@eslint/js": "^9.39.5",
+        "@biomejs/biome": "2.5.8",
         "@types/node": "^26.1.1",
         "@vitest/coverage-v8": "^4.1.10",
-        "eslint": "^9.39.5",
-        "eslint-plugin-import": "^2.32.0",
         "husky": "^9.1.7",
-        "lint-staged": "^17.0.8",
-        "prettier": "^3.9.5",
         "tsx": "^4.23.1",
         "typescript": "5.9.3",
-        "typescript-eslint": "^8.64.0",
         "vitest": "^4.1.10"
     }
 }
