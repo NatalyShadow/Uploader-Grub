@@ -1,15 +1,15 @@
-import { basename } from "path";
+import { basename } from "node:path";
 import {
+    FALLBACK_AUDIO_BITRATE,
+    USE_NICE,
+    VIDEO_CRF,
+    VIDEO_FFMPEG_TIMEOUT_MS,
+    VIDEO_PRESET,
     WATERMARK_MARGIN,
     WATERMARK_OPACITY,
-    FALLBACK_AUDIO_BITRATE,
-    VIDEO_FFMPEG_TIMEOUT_MS,
-    VIDEO_CRF,
-    VIDEO_PRESET,
-    USE_NICE,
 } from "../utils/constants.ts";
-import { getEncoderInfo, softwareEncoder, type EncoderInfo } from "../utils/encoder.ts";
-import { runCommand, TimeoutError } from "../utils/process.ts";
+import { type EncoderInfo, getEncoderInfo, softwareEncoder } from "../utils/encoder.ts";
+import { ProcessError, runCommand, TimeoutError } from "../utils/process.ts";
 import { createProgressTracker } from "../utils/progress.ts";
 
 function buildFilterComplex(logoSize: number, watermark: boolean): string {
@@ -124,6 +124,29 @@ async function runFfmpeg(
 }
 
 /**
+ * Returns true when ffmpeg's stderr says the failure is an audio-remux problem,
+ * i.e. the COPIED audio track cannot be placed in the output container (the one
+ * case re-encoding the audio to AAC actually fixes).
+ *
+ * In this pipeline the video stream is always re-encoded (libx264/hardware),
+ * never copied, so the copied stream is always the audio — the output's 0:1.
+ * Matching is intentionally conservative: a false "not-audio" only costs the
+ * AAC retry (the file is quarantined with the real error), while a false
+ * "audio" would revive the old bug of a wasted, misleadingly-logged AAC retry
+ * on a genuine video-encode failure.
+ */
+function isAudioCopyError(err: unknown): boolean {
+    if (!(err instanceof ProcessError)) return false;
+    const s = err.stderr;
+    return (
+        /could not find tag for codec/i.test(s) ||
+        /codec not currently supported in container/i.test(s) ||
+        (/not suitable for output format/i.test(s) && /audio/i.test(s)) ||
+        /output stream #0:1/i.test(s)
+    );
+}
+
+/**
  * Re-encodes a video to H.264/AAC `.mp4`, optionally overlaying the logo.
  *
  * Used for two jobs:
@@ -133,10 +156,12 @@ async function runFfmpeg(
  *
  * Quality-first (CRF near-lossless + copied audio), uses the auto-detected
  * hardware encoder when available (iGPU/GPU, far cooler and faster); falls back
- * to software libx264 if the hardware attempt fails (unsupported input/audio).
- * Falls back to re-encoding audio (AAC) if the original audio track can't be
- * remuxed into the output container (e.g. Opus from a WebM source). Timeouts
- * are NOT retried: a timeout is a resource problem, not a codec issue.
+ * to software libx264 if the hardware attempt fails (unsupported input/codec).
+ * Falls back to re-encoding audio (AAC) only when the failure is actually an
+ * audio-remux problem (stderr-classified, see `isAudioCopyError`), e.g. Opus
+ * from a WebM source; a genuine video-encode failure propagates the real error
+ * instead of wasting a misleading AAC retry. Timeouts are NOT retried: a
+ * timeout is a resource problem, not a codec issue.
  */
 export async function applyVideoWatermark(
     logoPath: string,
@@ -176,21 +201,42 @@ export async function applyVideoWatermark(
     } catch (err) {
         if (err instanceof TimeoutError) throw err;
 
-        if (enc.backend !== "libx264") {
+        if (isAudioCopyError(err)) {
+            // The copied audio cannot be remuxed into the container (e.g. Opus
+            // in a WebM source). The video encode itself is fine, so keep the
+            // same encoder and only re-encode the audio to AAC.
+            console.log(`🔊 ${label}: audio copy failed, re-encoding audio to AAC...`);
+            try {
+                await attempt("aac", enc);
+            } catch (err2) {
+                if (err2 instanceof TimeoutError) throw err2;
+                if (enc.backend === "libx264") throw err2;
+                console.log(`🔁 ${label}: ${enc.backend} encode failed, retrying with libx264...`);
+                await attempt("aac", softwareEncoder());
+            }
+        } else if (enc.backend === "libx264") {
+            // A genuine video-encode failure on the software encoder: there is
+            // nothing left to fall back to, so propagate the real error (the
+            // caller quarantines the file) instead of wasting an AAC retry.
+            throw err;
+        } else {
             // Hardware attempt failed (input/codec not supported): retry once
             // with the software encoder before giving up.
             console.log(`🔁 ${label}: ${enc.backend} encode failed, retrying with libx264...`);
-            const sw = softwareEncoder();
             try {
-                await attempt("copy", sw);
+                await attempt("copy", softwareEncoder());
             } catch (err2) {
                 if (err2 instanceof TimeoutError) throw err2;
-                console.log(`🔊 ${label}: audio copy failed, re-encoding audio to AAC...`);
-                await attempt("aac", sw);
+                if (isAudioCopyError(err2)) {
+                    console.log(`🔊 ${label}: audio copy failed, re-encoding audio to AAC...`);
+                    await attempt("aac", softwareEncoder());
+                    return;
+                }
+                // A video failure on the software encoder has no further
+                // fallback: throw err2 (the real error) so the caller
+                // quarantines the file.
+                throw err2;
             }
-        } else {
-            console.log(`🔊 ${label}: audio copy failed, re-encoding audio to AAC...`);
-            await attempt("aac", enc);
         }
     }
 }
