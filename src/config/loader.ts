@@ -1,7 +1,7 @@
-import { readFileSync } from "fs";
-import { join } from "path";
-import { expandEnvVars } from "../utils/env.ts";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { ConfigEntry } from "../types/index.ts";
+import { expandEnvVars } from "../utils/env.ts";
 
 interface RawConfigEntry {
     path?: unknown;

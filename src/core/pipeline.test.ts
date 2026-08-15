@@ -1,12 +1,11 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Client, GuildTextBasedChannel } from "discord.js";
-
-import { runPipeline } from "./pipeline.ts";
-import { ensureFfmpeg } from "../utils/validators.ts";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConfigEntry } from "../types/index.ts";
+import { ensureFfmpeg } from "../utils/validators.ts";
+import { runPipeline } from "./pipeline.ts";
 
 vi.mock("./channel.ts", () => ({
     resolveChannel: vi.fn(),

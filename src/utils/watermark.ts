@@ -1,4 +1,4 @@
-import { WATERMARK_HEIGHT_RATIO, WATERMARK_MIN_SIZE, WATERMARK_MAX_SIZE } from "./constants.ts";
+import { WATERMARK_HEIGHT_RATIO, WATERMARK_MAX_SIZE, WATERMARK_MIN_SIZE } from "./constants.ts";
 
 export function calculateLogoSize(width: number, height: number): number {
     const maxDim = Math.max(width, height);

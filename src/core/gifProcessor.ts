@@ -1,9 +1,9 @@
-import { basename } from "path";
+import { basename } from "node:path";
 import {
+    gifFfmpegTimeoutMs,
+    USE_NICE,
     WATERMARK_MARGIN,
     WATERMARK_OPACITY,
-    USE_NICE,
-    gifFfmpegTimeoutMs,
 } from "../utils/constants.ts";
 import { runCommand } from "../utils/process.ts";
 

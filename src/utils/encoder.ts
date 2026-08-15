@@ -1,5 +1,5 @@
-import { spawn } from "child_process";
-import { existsSync } from "fs";
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { VIDEO_ENCODER, VIDEO_FFMPEG_THREADS } from "./constants.ts";
 
 export type EncoderBackend = "qsv" | "vaapi" | "nvenc" | "amf" | "libx264";
@@ -269,9 +269,7 @@ async function resolveEncoderInfo(): Promise<EncoderInfo> {
         if (isBackend(VIDEO_ENCODER) && (await validateBackend(VIDEO_ENCODER))) {
             return buildInfo(VIDEO_ENCODER);
         }
-        console.warn(
-            `⚠️ VIDEO_ENCODER=${VIDEO_ENCODER} is not usable, falling back to auto-detect`
-        );
+        console.warn(`⚠️ VIDEO_ENCODER=${VIDEO_ENCODER} is not usable, falling back to auto-detect`);
     }
 
     for (const backend of PRIORITY) {

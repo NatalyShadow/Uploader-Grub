@@ -1,32 +1,30 @@
-import os from "os";
-import { join, extname, basename, dirname } from "path";
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
+import os from "node:os";
+import { basename, dirname, extname, join } from "node:path";
 import type { Client } from "discord.js";
-
-import { MAX_FILE_SIZE, SEND_REASON_TOO_LARGE, SHOW_FILE_PROGRESS } from "../utils/constants.ts";
-import {
-    readDirectory,
-    getFileStats,
-    isImage,
-    isGif,
-    isVideo,
-    isForcedMp4Video,
-    deleteFile,
-    moveFile,
-    ensureDirectory,
-    getOutputExtension,
-} from "../utils/files.ts";
-import { getVideoDimensions, getVideoDuration } from "../utils/ffprobe.ts";
 import type { ConfigEntry } from "../types/index.ts";
-
-import { resolveChannel } from "./channel.ts";
-import { applyImageWatermark } from "./imageProcessor.ts";
-import { applyVideoWatermark } from "./videoProcessor.ts";
-import { applyGifWatermark } from "./gifProcessor.ts";
-import { sendFile } from "./sender.ts";
+import { MAX_FILE_SIZE, SEND_REASON_TOO_LARGE, SHOW_FILE_PROGRESS } from "../utils/constants.ts";
+import { getVideoDimensions, getVideoDuration } from "../utils/ffprobe.ts";
+import {
+    deleteFile,
+    ensureDirectory,
+    getFileStats,
+    getOutputExtension,
+    isForcedMp4Video,
+    isGif,
+    isImage,
+    isVideo,
+    moveFile,
+    readDirectory,
+} from "../utils/files.ts";
 import { registerTemp, unregisterTemp } from "../utils/tempTracker.ts";
-import { calculateLogoSize } from "../utils/watermark.ts";
 import { ensureFfmpeg } from "../utils/validators.ts";
+import { calculateLogoSize } from "../utils/watermark.ts";
+import { resolveChannel } from "./channel.ts";
+import { applyGifWatermark } from "./gifProcessor.ts";
+import { applyImageWatermark } from "./imageProcessor.ts";
+import { sendFile } from "./sender.ts";
+import { applyVideoWatermark } from "./videoProcessor.ts";
 
 export interface PipelineOptions {
     skipWatermark: boolean;

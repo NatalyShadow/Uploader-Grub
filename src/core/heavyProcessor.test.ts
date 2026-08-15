@@ -1,13 +1,12 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readdirSync, existsSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
+import type { ConfigEntry } from "../types/index.ts";
+import { ensureFfmpeg } from "../utils/validators.ts";
 import { processHeavyFiles } from "./heavyProcessor.ts";
 import { processFile } from "./pipeline.ts";
-import { ensureFfmpeg } from "../utils/validators.ts";
-import type { ConfigEntry } from "../types/index.ts";
 
 vi.mock("./pipeline.ts", () => ({
     processFile: vi.fn(),

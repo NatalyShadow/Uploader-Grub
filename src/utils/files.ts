@@ -1,23 +1,23 @@
+import { randomUUID } from "node:crypto";
+import type { Stats } from "node:fs";
 import {
-    readdirSync,
-    statSync,
-    unlinkSync,
+    copyFileSync,
     existsSync,
     mkdirSync,
+    readdirSync,
     renameSync,
-    copyFileSync,
-} from "fs";
-import { extname, parse as parsePath, join as joinPath } from "path";
-import { randomUUID } from "crypto";
-import type { Stats } from "fs";
+    statSync,
+    unlinkSync,
+} from "node:fs";
+import { extname, join as joinPath, parse as parsePath } from "node:path";
 
 import {
-    IMAGE_EXTS,
-    UNSUPPORTED_IMAGE_EXTS,
-    VIDEO_EXTS,
     FORCE_MP4_VIDEO_EXTS,
     GIF_EXT,
+    IMAGE_EXTS,
+    UNSUPPORTED_IMAGE_EXTS,
     UUID_PREFIX,
+    VIDEO_EXTS,
 } from "./constants.ts";
 
 export function isImage(fileName: string): boolean {

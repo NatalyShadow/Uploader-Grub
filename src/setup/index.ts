@@ -1,6 +1,6 @@
+import type { ConfigEntry, OrganizerStats } from "../types/index.ts";
 import { createFolders } from "./folderManager.ts";
 import { organizeFiles } from "./organizer.ts";
-import type { ConfigEntry, OrganizerStats } from "../types/index.ts";
 
 const SUBFOLDERS = new Set<string>(["images", "videos", "heavy"]);
 

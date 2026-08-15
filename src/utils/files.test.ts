@@ -1,23 +1,23 @@
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, readdirSync, existsSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-    isImage,
-    isGif,
-    isVideo,
-    isUnsupportedImage,
-    isForcedMp4Video,
-    hasForcedMp4Files,
-    readDirectory,
-    getFileStats,
     deleteFile,
-    moveFile,
-    replaceFile,
     ensureDirectory,
     generateUuidName,
+    getFileStats,
     getOutputExtension,
+    hasForcedMp4Files,
+    isForcedMp4Video,
+    isGif,
+    isImage,
+    isUnsupportedImage,
+    isVideo,
+    moveFile,
+    readDirectory,
+    replaceFile,
 } from "./files.ts";
 
 let tmpDir: string;

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-
-import { getUniqueRoots } from "./index.ts";
 import type { ConfigEntry } from "../types/index.ts";
+import { getUniqueRoots } from "./index.ts";
 
 function entry(path: string): ConfigEntry {
     return { path, channelId: "123456" };

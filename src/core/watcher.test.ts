@@ -1,13 +1,12 @@
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import type { FSWatcher } from "chokidar";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Client } from "discord.js";
-
-import { watchRoots } from "./watcher.ts";
-import { runPipeline } from "./pipeline.ts";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { organizeFiles } from "../setup/organizer.ts";
 import type { ConfigEntry } from "../types/index.ts";
 import type { PipelineOptions } from "./pipeline.ts";
+import { runPipeline } from "./pipeline.ts";
+import { watchRoots } from "./watcher.ts";
 
 // chokidar is mocked so tests drive the watcher's events directly instead of
 // depending on real filesystem notifications.

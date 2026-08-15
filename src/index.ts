@@ -1,21 +1,21 @@
 import "dotenv/config";
-import { existsSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Client } from "discord.js";
 
 import { loadConfig } from "./config/loader.ts";
 import { initClient } from "./core/client.ts";
-import { runPipeline } from "./core/pipeline.ts";
-import { watchRoots } from "./core/watcher.ts";
 import { processHeavyFiles } from "./core/heavyProcessor.ts";
+import { runPipeline } from "./core/pipeline.ts";
 import { initSentRegistry } from "./core/sender.ts";
-import { runSetup, getUniqueRoots } from "./setup/index.ts";
-import { checkFfmpeg } from "./utils/validators.ts";
-import { hasForcedMp4Files } from "./utils/files.ts";
+import { watchRoots } from "./core/watcher.ts";
+import { getUniqueRoots, runSetup } from "./setup/index.ts";
 import { getEncoderInfo } from "./utils/encoder.ts";
+import { hasForcedMp4Files } from "./utils/files.ts";
 import { killAllProcesses } from "./utils/processTracker.ts";
 import { cleanupAllTemps } from "./utils/tempTracker.ts";
+import { checkFfmpeg } from "./utils/validators.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const logoPath = join(__dirname, "logo.webp");

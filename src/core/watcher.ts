@@ -1,9 +1,9 @@
 import { watch } from "chokidar";
 import type { Client } from "discord.js";
-import type { ConfigEntry } from "../types/index.ts";
 import { organizeFiles } from "../setup/organizer.ts";
-import { runPipeline } from "./pipeline.ts";
+import type { ConfigEntry } from "../types/index.ts";
 import type { PipelineOptions } from "./pipeline.ts";
+import { runPipeline } from "./pipeline.ts";
 
 const DEBOUNCE_MS = 3000;
 
@@ -37,7 +37,7 @@ async function processRoot(
     // below even when nothing was moved here.
     organizeFiles(root);
 
-    const rootEntries = config.filter((e) => e.path.startsWith(root + "/"));
+    const rootEntries = config.filter((e) => e.path.startsWith(`${root}/`));
     if (rootEntries.length === 0) return;
     await runPipeline(client, rootEntries, logoPath, options);
 }
@@ -137,7 +137,7 @@ export function watchRoots(
 
     watcher.on("add", (filePath: string) => {
         // Determine which root this file belongs to
-        const root = roots.find((r) => filePath.startsWith(r + "/") || filePath === r);
+        const root = roots.find((r) => filePath.startsWith(`${r}/`) || filePath === r);
         if (!root) return;
 
         debounceRoot(client, config, logoPath, options, root);

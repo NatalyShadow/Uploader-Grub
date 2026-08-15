@@ -27,7 +27,8 @@ export type SendFailureReason = "duplicate" | "too_large" | "error";
 
 /** Result of a single file send attempt. */
 export type SendResult =
-    { success: true } | { success: false; reason: SendFailureReason; message?: string };
+    | { success: true }
+    | { success: false; reason: SendFailureReason; message?: string };
 
 /** Stats returned by the loose-file organizer. */
 export interface OrganizerStats {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { runCommand, TimeoutError, ProcessError } from "./process.ts";
+import { ProcessError, runCommand, TimeoutError } from "./process.ts";
 
 const ECHO_CODE = "-e";
 

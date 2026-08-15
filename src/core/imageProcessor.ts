@@ -1,6 +1,6 @@
-import sharp from "sharp";
 import type { Metadata } from "sharp";
-import { WATERMARK_MARGIN, WATERMARK_OPACITY, SHARP_CONCURRENCY } from "../utils/constants.ts";
+import sharp from "sharp";
+import { SHARP_CONCURRENCY, WATERMARK_MARGIN, WATERMARK_OPACITY } from "../utils/constants.ts";
 import { calculateLogoSize } from "../utils/watermark.ts";
 
 // Cap libvips' worker pool so image watermarking never spikes all CPU cores

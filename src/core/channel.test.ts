@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
 import type { Client } from "discord.js";
+import { describe, expect, it, vi } from "vitest";
 
 import { resolveChannel } from "./channel.ts";
 

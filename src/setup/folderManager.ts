@@ -1,4 +1,4 @@
-import { join } from "path";
+import { join } from "node:path";
 import { ensureDirectory } from "../utils/files.ts";
 
 export function createFolders(rootPaths: string[]): void {

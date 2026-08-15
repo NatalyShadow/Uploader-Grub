@@ -1,6 +1,6 @@
+import type { Dimensions } from "../types/index.ts";
 import { FFPROBE_TIMEOUT_MS } from "./constants.ts";
 import { runCommand } from "./process.ts";
-import type { Dimensions } from "../types/index.ts";
 
 async function probe(args: string[]): Promise<string> {
     const { stdout } = await runCommand({

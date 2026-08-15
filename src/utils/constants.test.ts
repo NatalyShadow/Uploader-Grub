@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { gifFfmpegTimeoutMs, GIF_FFMPEG_TIMEOUT_MS } from "./constants.ts";
+import { GIF_FFMPEG_TIMEOUT_MS, gifFfmpegTimeoutMs } from "./constants.ts";
 
 describe("gifFfmpegTimeoutMs", () => {
     it("keeps the fixed 60s base when the duration is unknown (0)", () => {

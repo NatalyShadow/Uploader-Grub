@@ -1,9 +1,8 @@
-import { join, extname } from "path";
-import { readdirSync, statSync, renameSync, existsSync } from "fs";
-
-import { IMAGE_EXTS, VIDEO_EXTS, GIF_EXT, MAX_FILE_SIZE } from "../utils/constants.ts";
+import { existsSync, readdirSync, renameSync, type Stats, statSync } from "node:fs";
+import { extname, join } from "node:path";
+import type { MediaFolder, OrganizerStats } from "../types/index.ts";
+import { GIF_EXT, IMAGE_EXTS, MAX_FILE_SIZE, VIDEO_EXTS } from "../utils/constants.ts";
 import { ensureDirectory, generateUuidName } from "../utils/files.ts";
-import type { OrganizerStats, MediaFolder } from "../types/index.ts";
 
 function getOrganizerType(fileName: string): MediaFolder | null {
     const ext = extname(fileName).toLowerCase();
@@ -13,7 +12,7 @@ function getOrganizerType(fileName: string): MediaFolder | null {
 }
 
 export function organizeFiles(rootPath: string): OrganizerStats {
-    let entries;
+    let entries: string[];
     try {
         entries = readdirSync(rootPath);
     } catch (err) {
@@ -31,7 +30,7 @@ export function organizeFiles(rootPath: string): OrganizerStats {
     for (const entry of entries) {
         const filePath = join(rootPath, entry);
 
-        let stats;
+        let stats: Stats;
         try {
             stats = statSync(filePath);
         } catch {

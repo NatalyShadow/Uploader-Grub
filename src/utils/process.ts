@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess, type StdioOptions } from "child_process";
+import { type ChildProcess, type StdioOptions, spawn } from "node:child_process";
 import { registerProcess, unregisterProcess } from "./processTracker.ts";
 
 /** Thrown when a spawned process is killed for exceeding its timeout. */

@@ -1,28 +1,27 @@
-import os from "os";
-import { join, extname, basename } from "path";
-import { randomUUID } from "crypto";
-import { existsSync } from "fs";
-import type { ConfigEntry } from "../types/index.ts";
-
-import {
-    readDirectory,
-    getFileStats,
-    isImage,
-    isGif,
-    isVideo,
-    isForcedMp4Video,
-    moveFile,
-    deleteFile,
-    copyFile,
-    ensureDirectory,
-    replaceFile,
-    getOutputExtension,
-} from "../utils/files.ts";
-import { MAX_FILE_SIZE, SHOW_FILE_PROGRESS } from "../utils/constants.ts";
-import { registerTemp, unregisterTemp } from "../utils/tempTracker.ts";
-import { processFile } from "./pipeline.ts";
+import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
+import os from "node:os";
+import { basename, extname, join } from "node:path";
 import { getUniqueRoots } from "../setup/index.ts";
+import type { ConfigEntry } from "../types/index.ts";
+import { MAX_FILE_SIZE, SHOW_FILE_PROGRESS } from "../utils/constants.ts";
+import {
+    copyFile,
+    deleteFile,
+    ensureDirectory,
+    getFileStats,
+    getOutputExtension,
+    isForcedMp4Video,
+    isGif,
+    isImage,
+    isVideo,
+    moveFile,
+    readDirectory,
+    replaceFile,
+} from "../utils/files.ts";
+import { registerTemp, unregisterTemp } from "../utils/tempTracker.ts";
 import { ensureFfmpeg } from "../utils/validators.ts";
+import { processFile } from "./pipeline.ts";
 
 export interface HeavyProcessorOptions {
     skipWatermark: boolean;

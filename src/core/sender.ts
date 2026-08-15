@@ -1,16 +1,16 @@
-import type { GuildTextBasedChannel } from "discord.js";
-import { existsSync, readFileSync, renameSync, writeFileSync } from "fs";
-import { dirname } from "path";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { DiscordAPIError, HTTPError, RateLimitError } from "@discordjs/rest";
-import { ensureDirectory, getFileStats } from "../utils/files.ts";
+import type { GuildTextBasedChannel } from "discord.js";
+import type { SendResult } from "../types/index.ts";
 import {
     MAX_FILE_SIZE,
+    MAX_RETRY_AFTER_MS,
     MAX_SEND_RETRIES,
     RETRY_DELAY_MS,
-    MAX_RETRY_AFTER_MS,
     SEND_REASON_TOO_LARGE,
 } from "../utils/constants.ts";
-import type { SendResult } from "../types/index.ts";
+import { ensureDirectory, getFileStats } from "../utils/files.ts";
 
 // Dedup registry of sent files. Bounded so watch-mode sessions (which can run
 // for days) never grow it without limit; evicts the oldest key when full.
@@ -170,7 +170,7 @@ export async function sendFile(
             }
 
             // Exponential backoff with jitter, capped at MAX_RETRY_AFTER_MS
-            const baseDelay = retryAfterMs ?? RETRY_DELAY_MS * Math.pow(2, attempt);
+            const baseDelay = retryAfterMs ?? RETRY_DELAY_MS * 2 ** attempt;
             const jitter = Math.random() * 500;
             const delay = Math.min(baseDelay + jitter, MAX_RETRY_AFTER_MS);
 
