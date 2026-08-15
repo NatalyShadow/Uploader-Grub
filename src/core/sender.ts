@@ -1,6 +1,6 @@
 import type { GuildTextBasedChannel } from "discord.js";
-import { statSync } from "fs";
 import { DiscordAPIError, HTTPError, RateLimitError } from "@discordjs/rest";
+import { getFileStats } from "../utils/files.ts";
 import {
     MAX_FILE_SIZE,
     MAX_SEND_RETRIES,
@@ -82,7 +82,15 @@ export async function sendFile(
         return { success: false, reason: "duplicate" };
     }
 
-    const stats = statSync(filePath);
+    const stats = getFileStats(filePath);
+    if (stats === null) {
+        // The file vanished or is unreadable between the scan and the send
+        // (e.g. a watch-mode race where the organizer moved it, or a temp that
+        // no longer exists). Report it as a failed send instead of throwing, so
+        // the pipeline does not quarantine a perfectly fine file.
+        console.error(`❌ Cannot stat ${fileName}: file missing or unreadable (${filePath})`);
+        return { success: false, reason: "error", message: "file missing or unreadable" };
+    }
     if (stats.size > MAX_FILE_SIZE) {
         const sizeMB = (stats.size / (1024 * 1024)).toFixed(1);
         const limitMB = (MAX_FILE_SIZE / (1024 * 1024)).toFixed(1);

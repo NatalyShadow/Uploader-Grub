@@ -183,6 +183,20 @@ describe("sendFile", () => {
         }
         expect(channel.send).toHaveBeenCalledTimes(1);
     });
+
+    it("returns an error result instead of throwing when the file does not exist", async () => {
+        rmSync(filePath, { force: true });
+        const channel = mockChannel();
+
+        const result = await sendFile(asChannel(channel), filePath, "clip.mp4", "aaa");
+
+        expect(result).toEqual({
+            success: false,
+            reason: "error",
+            message: "file missing or unreadable",
+        });
+        expect(channel.send).not.toHaveBeenCalled();
+    });
 });
 
 describe("sendFile with a small size limit", () => {
