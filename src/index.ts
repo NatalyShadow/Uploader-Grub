@@ -126,9 +126,16 @@ async function main(): Promise<void> {
 
     // With --skip-watermark, ffmpeg is only required when a forced-mp4
     // container (.3gp) is present — those are converted without a logo. With
-    // watermarking enabled it is always required.
+    // watermarking enabled it is always required. heavy/ is scanned too: the
+    // organizer moves oversized .3gp files there unconverted, and --process-heavy
+    // skips them silently if ffmpeg is missing.
+    const roots = getUniqueRoots(config);
     const needsFfmpeg =
-        !options.skipWatermark || hasForcedMp4Files(config.map((entry) => entry.path));
+        !options.skipWatermark ||
+        hasForcedMp4Files([
+            ...config.map((entry) => entry.path),
+            ...roots.map((root) => join(root, "heavy")),
+        ]);
 
     if (needsFfmpeg) {
         const hasFfmpeg = await checkFfmpeg();
