@@ -129,6 +129,20 @@ make down                                        # stop
 | `--watch`          | 👀 Keep running, process new files as they arrive                                                                                                                          |
 | `--process-heavy`  | 🔄 Process `heavy/` folder with the same quality-first watermarking; move files that now fit the limit up one level, keep oversized ones (already watermarked) in `heavy/` |
 
+### 📥 Where to drop files (watch mode)
+
+`--watch` watches **both** the root folder of each media category **and** every
+folder listed in `config.json`:
+
+- **In the root** (e.g. `$HOME/vanilla/`): loose files are organized
+  automatically — moved into `images/`, `videos/` or `heavy/` with a UUID name,
+  then processed.
+- **Directly in a configured subfolder** (e.g. `$HOME/vanilla/videos/`): the
+  file is picked up as-is and processed with its original name.
+
+Either way the pipeline runs for the affected root, so there is no wrong place
+to drop a file.
+
 ---
 
 ### 🔄 Process Heavy Folder (`--process-heavy`)

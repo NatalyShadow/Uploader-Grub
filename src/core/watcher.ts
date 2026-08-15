@@ -31,15 +31,14 @@ async function processRoot(
     options: PipelineOptions,
     root: string
 ): Promise<void> {
-    const stats = organizeFiles(root);
-    if (stats.moved === 0) return;
-
-    if (stats.moved === stats.heavy) {
-        console.log(`📦 ${stats.heavy} file(s) moved to heavy/, skipping pipeline`);
-        return;
-    }
+    // Move loose files sitting in the root into their media subfolders
+    // (images/, videos/, heavy/) so they get a UUID name. Files dropped
+    // directly into a configured subfolder are picked up by the pipeline
+    // below even when nothing was moved here.
+    organizeFiles(root);
 
     const rootEntries = config.filter((e) => e.path.startsWith(root + "/"));
+    if (rootEntries.length === 0) return;
     await runPipeline(client, rootEntries, logoPath, options);
 }
 
@@ -112,18 +111,24 @@ export function watchRoots(
     options: PipelineOptions,
     roots: string[]
 ): void {
-    console.log(`👀 Watching ${roots.length} root(s) for new files...`);
+    // Watch both the roots (for loose files the organizer moves into
+    // subfolders) and every configured subfolder (images/, videos/…) so
+    // files dropped directly into a configured folder are seen too.
+    const dirsToWatch = [...new Set([...roots, ...config.map((entry) => entry.path)])];
+    console.log(
+        `👀 Watching ${roots.length} root(s) and ${config.length} subfolder(s) for new files...`
+    );
 
     // Initial scan to catch files that arrived between setup and watch start
     for (const root of roots) {
         markRootReady(client, config, logoPath, options, root);
     }
 
-    const watcher = watch(roots, {
+    const watcher = watch(dirsToWatch, {
         ignored: /(^|[/\\])\../, // ignore dotfiles
         persistent: true,
         ignoreInitial: true,
-        depth: 0, // only watch root level, not subdirectories
+        depth: 0, // only watch each path itself, not subdirectories
         awaitWriteFinish: {
             stabilityThreshold: 2000, // wait until file stops growing for 2s
             pollInterval: 100,
