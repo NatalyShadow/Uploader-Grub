@@ -27,14 +27,14 @@ function shutdown(signal: string): void {
         .then(() => {
             cleanupAllTemps();
             if (client) {
-                void client.destroy();
+                void client.destroy().catch(() => undefined);
             }
             process.exit(0);
         })
         .catch(() => {
             cleanupAllTemps();
             if (client) {
-                void client.destroy();
+                void client.destroy().catch(() => undefined);
             }
             process.exit(1);
         });
@@ -42,6 +42,21 @@ function shutdown(signal: string): void {
 
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+// A single stray rejection must not take down a long-running watch session:
+// log it and keep going. The codebase already catches expected errors; this is
+// a safety net for unexpected ones.
+process.on("unhandledRejection", (reason) => {
+    const message = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
+    console.error("⚠️ Unhandled promise rejection:", message);
+});
+
+// An uncaught exception leaves the process in an undefined state, so clean up
+// (kill ffmpeg children, remove temps, destroy the client) and exit.
+process.on("uncaughtException", (error) => {
+    console.error("❌ Uncaught exception:", error);
+    shutdown("uncaughtException");
+});
 
 /** Logs the detected video encoder once (hardware vs software). */
 async function logVideoEncoder(): Promise<void> {
@@ -162,7 +177,7 @@ async function main(): Promise<void> {
                     watchRoots(client!, config, logoPath, options, roots);
                     return;
                 }
-                void client!.destroy();
+                void client!.destroy().catch(() => undefined);
                 cleanupAllTemps();
                 process.exit(0);
             })
@@ -175,4 +190,8 @@ async function main(): Promise<void> {
     await client.login(process.env.DISCORD_TOKEN);
 }
 
-void main();
+void main().catch((err) => {
+    const message = err instanceof Error ? (err.stack ?? err.message) : String(err);
+    console.error("❌ Fatal error:", message);
+    process.exit(1);
+});
