@@ -1,6 +1,8 @@
 import type { GuildTextBasedChannel } from "discord.js";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "fs";
+import { dirname } from "path";
 import { DiscordAPIError, HTTPError, RateLimitError } from "@discordjs/rest";
-import { getFileStats } from "../utils/files.ts";
+import { ensureDirectory, getFileStats } from "../utils/files.ts";
 import {
     MAX_FILE_SIZE,
     MAX_SEND_RETRIES,
@@ -12,11 +14,55 @@ import type { SendResult } from "../types/index.ts";
 
 // Dedup registry of sent files. Bounded so watch-mode sessions (which can run
 // for days) never grow it without limit; evicts the oldest key when full.
+// Optionally persisted to disk (one key per line) so a restart of the bot does
+// not re-send files that were already uploaded.
 const sentFiles = new Set<string>();
 const SENT_DEDUP_LIMIT = 2000;
+let sentRegistryPath: string | null = null;
 
 export function hasBeenSent(fileName: string): boolean {
     return sentFiles.has(fileName);
+}
+
+/**
+ * Loads the persisted sent-file registry (one key per line) into memory and
+ * records the file path so every markAsSent() updates it. Missing or
+ * unreadable files are ignored — the bot starts with an empty registry.
+ */
+export function initSentRegistry(filePath: string): void {
+    sentRegistryPath = filePath;
+    sentFiles.clear();
+    if (!existsSync(filePath)) return;
+
+    try {
+        const lines = readFileSync(filePath, "utf-8").split("\n");
+        for (const line of lines) {
+            const key = line.trim();
+            if (key === "" || sentFiles.size >= SENT_DEDUP_LIMIT) continue;
+            sentFiles.add(key);
+        }
+    } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.error(`⚠️ Could not read sent-file registry (${filePath}): ${message}`);
+    }
+}
+
+/**
+ * Writes the registry to disk atomically (temp file + rename) so a crash never
+ * leaves a half-written file. Failures are logged but never fatal: dedup keeps
+ * working in memory for the current session.
+ */
+function persistSentRegistry(): void {
+    if (sentRegistryPath === null) return;
+    ensureDirectory(dirname(sentRegistryPath));
+    const tmpPath = `${sentRegistryPath}.tmp`;
+    try {
+        writeFileSync(tmpPath, [...sentFiles].join("\n"));
+        renameSync(tmpPath, sentRegistryPath);
+    } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.error(`⚠️ Could not persist sent-file registry (${sentRegistryPath}): ${message}`);
+    }
 }
 
 export function markAsSent(fileName: string): void {
@@ -27,6 +73,7 @@ export function markAsSent(fileName: string): void {
             sentFiles.delete(oldest);
         }
     }
+    persistSentRegistry();
 }
 
 /**

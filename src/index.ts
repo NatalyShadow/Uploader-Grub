@@ -9,6 +9,7 @@ import { initClient } from "./core/client.ts";
 import { runPipeline } from "./core/pipeline.ts";
 import { watchRoots } from "./core/watcher.ts";
 import { processHeavyFiles } from "./core/heavyProcessor.ts";
+import { initSentRegistry } from "./core/sender.ts";
 import { runSetup, getUniqueRoots } from "./setup/index.ts";
 import { checkFfmpeg } from "./utils/validators.ts";
 import { hasForcedMp4Files } from "./utils/files.ts";
@@ -133,6 +134,14 @@ async function main(): Promise<void> {
     // Normal bot mode
     const config = loadConfig();
     runSetup(config);
+
+    // Persist the sent-file dedup registry in the first root's hidden .state/
+    // folder so a restart never re-sends files that were already uploaded.
+    // The folder is invisible to the organizer, the watcher and the pipeline.
+    const dedupRoot = getUniqueRoots(config)[0];
+    if (dedupRoot) {
+        initSentRegistry(join(dedupRoot, ".state", "sent.log"));
+    }
 
     if (!options.skipWatermark && !existsSync(logoPath)) {
         console.error(`❌ Logo not found: ${logoPath}`);

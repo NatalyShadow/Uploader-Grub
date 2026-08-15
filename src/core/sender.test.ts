@@ -216,3 +216,41 @@ describe("sendFile with a small size limit", () => {
         expect(channel.send).not.toHaveBeenCalled();
     });
 });
+
+describe("persistent sent-file registry", () => {
+    it("loads nothing when the state file does not exist", async () => {
+        vi.resetModules();
+        const fresh = await import("./sender.ts");
+
+        fresh.initSentRegistry(join(tmpDir, "missing", "sent.log"));
+        expect(fresh.hasBeenSent("111:clip.mp4")).toBe(false);
+    });
+
+    it("persists sent keys across restarts", async () => {
+        vi.resetModules();
+        const first = await import("./sender.ts");
+        const registryPath = join(tmpDir, "state", "sent.log");
+
+        first.initSentRegistry(registryPath);
+        first.markAsSent("111:clip.mp4");
+
+        // Simulate a bot restart: fresh module instance, same state file.
+        vi.resetModules();
+        const second = await import("./sender.ts");
+        second.initSentRegistry(registryPath);
+
+        expect(second.hasBeenSent("111:clip.mp4")).toBe(true);
+    });
+
+    it("keeps working in memory when the registry cannot be written", async () => {
+        vi.resetModules();
+        const fresh = await import("./sender.ts");
+
+        // filePath points to a regular file, so its "directory" cannot be created.
+        const badPath = join(filePath, "sent.log");
+        fresh.initSentRegistry(badPath);
+
+        expect(() => fresh.markAsSent("111:clip.mp4")).not.toThrow();
+        expect(fresh.hasBeenSent("111:clip.mp4")).toBe(true);
+    });
+});
