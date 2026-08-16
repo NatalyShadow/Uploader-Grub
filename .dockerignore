@@ -1,5 +1,6 @@
 node_modules/
 dist/
+coverage/
 .git/
 .husky/
 *.tsbuildinfo
@@ -9,4 +10,11 @@ dist/
 src/config.json
 Dockerfile
 docker-compose.yml
+docker-compose.gpu.yml
+docker-compose.gpu-nvidia.yml
 .dockerignore
+Makefile
+biome.json
+.editorconfig
+*.md
+review.md

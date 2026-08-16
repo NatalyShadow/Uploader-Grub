@@ -109,18 +109,21 @@ your-media-root/
 ## 🪱 Usage
 
 ```bash
-make up                                          # default
+make up                                          # default (one-shot: organize, upload, stop)
 make up FLAGS="--skip-watermark"                 # no watermark
 make up FLAGS="--move-sent"                      # keep originals
 make up FLAGS="--skip-watermark --move-sent"     # both
-make up FLAGS="--watch"                          # watch mode
-make up FLAGS="--watch --skip-watermark"         # watch + no WM
-make up FLAGS="--watch --move-sent"             # watch + keep
+make up-watch                                    # watch mode (auto-restart, keeps running)
+make up-watch FLAGS="--skip-watermark"           # watch + no WM
 make process-heavy                               # process heavy/ folder locally
 make up FLAGS="--process-heavy"                  # same via flag
 make build                                       # rebuild image
 make down                                        # stop
 ```
+
+> 💡 `make up` runs **once**: it organizes, uploads and stops. For a long-running
+> session that keeps watching and auto-restarts, use `make up-watch` (or set
+> `RESTART_POLICY=unless-stopped` yourself).
 
 | Flag               | Effect                                                                                                                                                                     |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

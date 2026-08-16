@@ -1,0 +1,21 @@
+# Optional GPU overlay: enables NVENC hardware video encoding on NVIDIA hosts.
+# Use together with the base file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu-nvidia.yml up
+#   make up-gpu-nvidia
+#
+# Requires the NVIDIA Container Toolkit (nvidia-container-toolkit) installed
+# and configured as the default runtime on the host:
+#   https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/
+#
+# The bot auto-detects the best encoder at boot and validates it with a
+# micro-encode, so hosts without a usable GPU degrade cleanly to software
+# encoding. Confirm the detected backend in the boot log:
+# "⚡ Video encoding: hardware" or "🧠 Video encoding: software".
+services:
+    bot:
+        gpus: all
+        environment:
+            # NVENC needs no device init; force it so the qsv/vaapi/amf probes
+            # are skipped.
+            VIDEO_ENCODER: nvenc

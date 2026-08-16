@@ -1,0 +1,23 @@
+# Optional GPU overlay: enables VAAPI hardware video encoding on Intel/AMD
+# hosts. Use together with the base file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
+#   make up-gpu
+#
+# The bot auto-detects the best encoder at boot (qsv → vaapi → nvenc → amf →
+# libx264) and validates it with a micro-encode, so hosts without a usable GPU
+# degrade cleanly to software encoding. Confirm the detected backend in the
+# boot log: "⚡ Video encoding: hardware" or "🧠 Video encoding: software".
+services:
+    bot:
+        devices:
+            # Intel iGPU / AMD APU (render node, VAAPI). Requires the host to
+            # have a /dev/dri render node and the iHD (Intel) / radeonsi (AMD)
+            # VA driver; on Intel hosts `intel-media-va-driver` is pulled in by
+            # the ffmpeg package already.
+            - /dev/dri/renderD128:/dev/dri/renderD128
+        environment:
+            # Skip the qsv/nvenc/amf probes and go straight to VAAPI: the
+            # Debian ffmpeg build has h264_qsv without a usable MFX session,
+            # so auto-detect would only waste a probe on it.
+            VIDEO_ENCODER: vaapi

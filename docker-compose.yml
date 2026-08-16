@@ -5,6 +5,14 @@ services:
             dockerfile: Dockerfile
         container_name: discord_uploader_bot
         user: "${UID:-1000}:${GID:-1000}"
+        # PID-1 reaping: init forwards signals (SIGTERM/SIGINT) to node and
+        # reaps orphaned ffmpeg children, so the app's shutdown handlers
+        # (index.ts) always run.
+        init: true
+        # Default: one-shot (the bot organizes, uploads and exits). Set
+        # RESTART_POLICY=unless-stopped for long-running watch sessions that
+        # should auto-restart (see `make up-watch`).
+        restart: "${RESTART_POLICY:-no}"
         command: node dist/index.js ${EXTRA_FLAGS:-}
         env_file: .env
         environment:
